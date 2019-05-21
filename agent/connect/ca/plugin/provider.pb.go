@@ -8,6 +8,11 @@ import (
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+<<<<<<< HEAD
+=======
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 	io "io"
 	math "math"
 )
@@ -36,7 +41,11 @@ func (m *ConfigureRequest) Reset()         { *m = ConfigureRequest{} }
 func (m *ConfigureRequest) String() string { return proto.CompactTextString(m) }
 func (*ConfigureRequest) ProtoMessage()    {}
 func (*ConfigureRequest) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{0}
+=======
+	return fileDescriptor_94daeb7181770839, []int{0}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *ConfigureRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -98,7 +107,11 @@ func (m *SetIntermediateRequest) Reset()         { *m = SetIntermediateRequest{}
 func (m *SetIntermediateRequest) String() string { return proto.CompactTextString(m) }
 func (*SetIntermediateRequest) ProtoMessage()    {}
 func (*SetIntermediateRequest) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{1}
+=======
+	return fileDescriptor_94daeb7181770839, []int{1}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *SetIntermediateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -152,7 +165,11 @@ func (m *SignRequest) Reset()         { *m = SignRequest{} }
 func (m *SignRequest) String() string { return proto.CompactTextString(m) }
 func (*SignRequest) ProtoMessage()    {}
 func (*SignRequest) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{2}
+=======
+	return fileDescriptor_94daeb7181770839, []int{2}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *SignRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -199,7 +216,11 @@ func (m *SignIntermediateRequest) Reset()         { *m = SignIntermediateRequest
 func (m *SignIntermediateRequest) String() string { return proto.CompactTextString(m) }
 func (*SignIntermediateRequest) ProtoMessage()    {}
 func (*SignIntermediateRequest) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{3}
+=======
+	return fileDescriptor_94daeb7181770839, []int{3}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *SignIntermediateRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -246,7 +267,11 @@ func (m *CrossSignCARequest) Reset()         { *m = CrossSignCARequest{} }
 func (m *CrossSignCARequest) String() string { return proto.CompactTextString(m) }
 func (*CrossSignCARequest) ProtoMessage()    {}
 func (*CrossSignCARequest) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{4}
+=======
+	return fileDescriptor_94daeb7181770839, []int{4}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *CrossSignCARequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -293,7 +318,11 @@ func (m *ActiveRootResponse) Reset()         { *m = ActiveRootResponse{} }
 func (m *ActiveRootResponse) String() string { return proto.CompactTextString(m) }
 func (*ActiveRootResponse) ProtoMessage()    {}
 func (*ActiveRootResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{5}
+=======
+	return fileDescriptor_94daeb7181770839, []int{5}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *ActiveRootResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -340,7 +369,11 @@ func (m *GenerateIntermediateCSRResponse) Reset()         { *m = GenerateInterme
 func (m *GenerateIntermediateCSRResponse) String() string { return proto.CompactTextString(m) }
 func (*GenerateIntermediateCSRResponse) ProtoMessage()    {}
 func (*GenerateIntermediateCSRResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{6}
+=======
+	return fileDescriptor_94daeb7181770839, []int{6}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *GenerateIntermediateCSRResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -387,7 +420,11 @@ func (m *ActiveIntermediateResponse) Reset()         { *m = ActiveIntermediateRe
 func (m *ActiveIntermediateResponse) String() string { return proto.CompactTextString(m) }
 func (*ActiveIntermediateResponse) ProtoMessage()    {}
 func (*ActiveIntermediateResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{7}
+=======
+	return fileDescriptor_94daeb7181770839, []int{7}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *ActiveIntermediateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -434,7 +471,11 @@ func (m *GenerateIntermediateResponse) Reset()         { *m = GenerateIntermedia
 func (m *GenerateIntermediateResponse) String() string { return proto.CompactTextString(m) }
 func (*GenerateIntermediateResponse) ProtoMessage()    {}
 func (*GenerateIntermediateResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{8}
+=======
+	return fileDescriptor_94daeb7181770839, []int{8}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *GenerateIntermediateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -481,7 +522,11 @@ func (m *SignResponse) Reset()         { *m = SignResponse{} }
 func (m *SignResponse) String() string { return proto.CompactTextString(m) }
 func (*SignResponse) ProtoMessage()    {}
 func (*SignResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{9}
+=======
+	return fileDescriptor_94daeb7181770839, []int{9}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *SignResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -528,7 +573,11 @@ func (m *SignIntermediateResponse) Reset()         { *m = SignIntermediateRespon
 func (m *SignIntermediateResponse) String() string { return proto.CompactTextString(m) }
 func (*SignIntermediateResponse) ProtoMessage()    {}
 func (*SignIntermediateResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{10}
+=======
+	return fileDescriptor_94daeb7181770839, []int{10}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *SignIntermediateResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -575,7 +624,11 @@ func (m *CrossSignCAResponse) Reset()         { *m = CrossSignCAResponse{} }
 func (m *CrossSignCAResponse) String() string { return proto.CompactTextString(m) }
 func (*CrossSignCAResponse) ProtoMessage()    {}
 func (*CrossSignCAResponse) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{11}
+=======
+	return fileDescriptor_94daeb7181770839, []int{11}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *CrossSignCAResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -623,7 +676,11 @@ func (m *Empty) Reset()         { *m = Empty{} }
 func (m *Empty) String() string { return proto.CompactTextString(m) }
 func (*Empty) ProtoMessage()    {}
 func (*Empty) Descriptor() ([]byte, []int) {
+<<<<<<< HEAD
 	return fileDescriptor_c6a9f3c02af3d1c8, []int{12}
+=======
+	return fileDescriptor_94daeb7181770839, []int{12}
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 func (m *Empty) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -668,6 +725,7 @@ func init() {
 	proto.RegisterType((*Empty)(nil), "plugin.Empty")
 }
 
+<<<<<<< HEAD
 func init() { proto.RegisterFile("provider.proto", fileDescriptor_c6a9f3c02af3d1c8) }
 
 var fileDescriptor_c6a9f3c02af3d1c8 = []byte{
@@ -705,6 +763,50 @@ var fileDescriptor_c6a9f3c02af3d1c8 = []byte{
 	0xc2, 0x79, 0x18, 0x47, 0xb7, 0xdb, 0xeb, 0x9d, 0xf1, 0x6b, 0x6d, 0x6b, 0xbf, 0xd7, 0xb6, 0xf6,
 	0x67, 0x6d, 0x6b, 0x3f, 0xfe, 0xda, 0xff, 0x5d, 0xea, 0xe9, 0x6f, 0xf9, 0xe4, 0x5f, 0x00, 0x00,
 	0x00, 0xff, 0xff, 0x75, 0xd0, 0x68, 0xcb, 0xa8, 0x05, 0x00, 0x00,
+=======
+func init() {
+	proto.RegisterFile("agent/connect/ca/plugin/provider.proto", fileDescriptor_94daeb7181770839)
+}
+
+var fileDescriptor_94daeb7181770839 = []byte{
+	// 566 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x54, 0xdf, 0x6e, 0xd3, 0x3e,
+	0x18, 0xfd, 0xa5, 0xfb, 0xad, 0x5d, 0xbf, 0x15, 0xad, 0xf2, 0xa6, 0xb5, 0x14, 0x68, 0xab, 0x08,
+	0xad, 0x45, 0x40, 0x23, 0x28, 0x68, 0x12, 0x57, 0x94, 0x68, 0x4c, 0x13, 0x37, 0x23, 0x15, 0x37,
+	0x5c, 0x50, 0xa5, 0xae, 0x49, 0x2d, 0x35, 0x71, 0xb0, 0x9d, 0x49, 0xbc, 0x09, 0x6f, 0x04, 0x97,
+	0x3c, 0x02, 0x2a, 0x2f, 0x82, 0x9c, 0x26, 0x59, 0x92, 0xa6, 0xcb, 0x5d, 0xfc, 0xe5, 0x9c, 0xf3,
+	0xfd, 0x3b, 0x36, 0x9c, 0xd9, 0x0e, 0xf1, 0xa4, 0x81, 0x99, 0xe7, 0x11, 0x2c, 0x0d, 0x6c, 0x1b,
+	0xfe, 0x2a, 0x70, 0xa8, 0x67, 0xf8, 0x9c, 0xdd, 0xd0, 0x05, 0xe1, 0x23, 0x9f, 0x33, 0xc9, 0x50,
+	0x75, 0x13, 0xd6, 0xe7, 0xd0, 0x34, 0x99, 0xf7, 0x95, 0x3a, 0x01, 0x27, 0x16, 0xf9, 0x16, 0x10,
+	0x21, 0xd1, 0x23, 0x00, 0xbc, 0x0a, 0x84, 0x24, 0x7c, 0x46, 0x17, 0x6d, 0xad, 0xaf, 0x0d, 0xeb,
+	0x56, 0x3d, 0x8a, 0x5c, 0x2d, 0x50, 0x0b, 0x6a, 0x54, 0xcc, 0x38, 0x63, 0xb2, 0x5d, 0xe9, 0x6b,
+	0xc3, 0x03, 0xab, 0x4a, 0x85, 0xc5, 0x98, 0x44, 0xa7, 0x50, 0xc5, 0xa1, 0x56, 0x7b, 0xaf, 0xaf,
+	0x0d, 0x1b, 0x56, 0x74, 0xd2, 0xbf, 0xc0, 0xe9, 0x94, 0xc8, 0x2b, 0x4f, 0x12, 0xee, 0x92, 0x05,
+	0xb5, 0x65, 0x92, 0xe9, 0x09, 0x34, 0x69, 0x2a, 0x3c, 0xf3, 0x89, 0x1b, 0xe5, 0x3b, 0x4a, 0xc7,
+	0xaf, 0x89, 0x8b, 0xee, 0xc3, 0x81, 0x4a, 0x19, 0x42, 0x2a, 0x21, 0xa4, 0xa6, 0xce, 0xd7, 0xc4,
+	0xd5, 0x7b, 0x70, 0x38, 0xa5, 0x8e, 0x17, 0x8b, 0x36, 0x61, 0x0f, 0x0b, 0x1e, 0xea, 0x34, 0x2c,
+	0xf5, 0xa9, 0x3f, 0x85, 0x96, 0x02, 0x14, 0x55, 0xb0, 0x0d, 0x3e, 0x03, 0x64, 0x72, 0x26, 0x84,
+	0x62, 0x98, 0x93, 0x34, 0x8e, 0xcb, 0x04, 0xc7, 0xa5, 0xfe, 0x1c, 0xd0, 0x04, 0x4b, 0x7a, 0x43,
+	0x54, 0xef, 0x16, 0x11, 0x3e, 0xf3, 0x04, 0x51, 0xc3, 0xc1, 0x5c, 0xa6, 0x1a, 0xa9, 0x62, 0x1e,
+	0x16, 0xf9, 0x06, 0x7a, 0x97, 0xc4, 0x23, 0xdc, 0x96, 0x24, 0x5d, 0x87, 0x39, 0xb5, 0x32, 0x5c,
+	0xc1, 0x33, 0x5c, 0xc1, 0x15, 0xf7, 0x35, 0x74, 0x36, 0xa9, 0xb2, 0x1d, 0x94, 0xa5, 0x3c, 0x87,
+	0x87, 0x45, 0x29, 0xcb, 0x89, 0x03, 0x68, 0x6c, 0x06, 0x5a, 0x06, 0x1c, 0x43, 0x7b, 0x7b, 0xb0,
+	0x65, 0xa4, 0x11, 0x1c, 0x67, 0x06, 0x5c, 0x86, 0xaf, 0xc1, 0xfe, 0x85, 0xeb, 0xcb, 0xef, 0x2f,
+	0x7f, 0xee, 0x43, 0xc5, 0x9c, 0xa0, 0x57, 0x50, 0x4f, 0x2c, 0x8b, 0xda, 0xa3, 0x8d, 0x91, 0x47,
+	0x79, 0x17, 0x77, 0xee, 0xc5, 0x7f, 0x42, 0x32, 0x7a, 0x06, 0x8d, 0x78, 0x18, 0xa1, 0x59, 0xb3,
+	0xbf, 0xf3, 0xe8, 0x73, 0x80, 0xdb, 0xe5, 0xe6, 0xb1, 0x9d, 0xf8, 0x58, 0xb0, 0xff, 0x8f, 0xd0,
+	0xda, 0xb1, 0xe6, 0xbc, 0xca, 0x20, 0x3e, 0x96, 0xd9, 0xe2, 0x2d, 0x1c, 0xe5, 0xae, 0x0f, 0xea,
+	0xc6, 0xdc, 0xe2, 0x7b, 0x95, 0xef, 0xe6, 0x32, 0xb6, 0x6a, 0x46, 0x24, 0x57, 0x8f, 0x9e, 0xed,
+	0xaa, 0x70, 0xa7, 0x1f, 0xe0, 0xa4, 0xa8, 0xda, 0xbc, 0xd4, 0xe3, 0xbb, 0x5a, 0x4b, 0xc4, 0x5e,
+	0xc0, 0xff, 0xca, 0x02, 0xe8, 0x38, 0x69, 0xe6, 0xf6, 0x12, 0x77, 0x4e, 0xb2, 0xc1, 0x88, 0xf2,
+	0x09, 0x9a, 0x79, 0xbf, 0xa1, 0x5e, 0x1a, 0x59, 0x34, 0x8c, 0xfe, 0x6e, 0x40, 0x24, 0xfb, 0x1e,
+	0x0e, 0x53, 0x8e, 0x44, 0xc9, 0x7e, 0xb7, 0xdf, 0x81, 0xce, 0x83, 0xc2, 0x7f, 0x91, 0xce, 0x00,
+	0x6a, 0xe6, 0x8a, 0xd8, 0x5e, 0xe0, 0xdf, 0x6d, 0xaf, 0x77, 0x17, 0xbf, 0xd6, 0x5d, 0xed, 0xf7,
+	0xba, 0xab, 0xfd, 0x59, 0x77, 0xb5, 0x1f, 0x7f, 0xbb, 0xff, 0x7d, 0x1e, 0x3b, 0x54, 0x2e, 0x83,
+	0xf9, 0x08, 0x33, 0xd7, 0x58, 0xda, 0x62, 0x49, 0x31, 0xe3, 0xbe, 0x7a, 0xc6, 0x45, 0xb0, 0x32,
+	0x76, 0xbc, 0xe9, 0xf3, 0x6a, 0xf8, 0x96, 0x8f, 0xff, 0x05, 0x00, 0x00, 0xff, 0xff, 0x7b, 0x20,
+	0xb4, 0xe4, 0xf5, 0x05, 0x00, 0x00,
+>>>>>>> consul: add a grpc listener and test method on the rpc port
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -852,6 +954,44 @@ type CAServer interface {
 	SignIntermediate(context.Context, *SignIntermediateRequest) (*SignIntermediateResponse, error)
 	CrossSignCA(context.Context, *CrossSignCARequest) (*CrossSignCAResponse, error)
 	Cleanup(context.Context, *Empty) (*Empty, error)
+}
+
+// UnimplementedCAServer can be embedded to have forward compatible implementations.
+type UnimplementedCAServer struct {
+}
+
+func (*UnimplementedCAServer) Configure(ctx context.Context, req *ConfigureRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Configure not implemented")
+}
+func (*UnimplementedCAServer) GenerateRoot(ctx context.Context, req *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateRoot not implemented")
+}
+func (*UnimplementedCAServer) ActiveRoot(ctx context.Context, req *Empty) (*ActiveRootResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ActiveRoot not implemented")
+}
+func (*UnimplementedCAServer) GenerateIntermediateCSR(ctx context.Context, req *Empty) (*GenerateIntermediateCSRResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateIntermediateCSR not implemented")
+}
+func (*UnimplementedCAServer) SetIntermediate(ctx context.Context, req *SetIntermediateRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetIntermediate not implemented")
+}
+func (*UnimplementedCAServer) ActiveIntermediate(ctx context.Context, req *Empty) (*ActiveIntermediateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ActiveIntermediate not implemented")
+}
+func (*UnimplementedCAServer) GenerateIntermediate(ctx context.Context, req *Empty) (*GenerateIntermediateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateIntermediate not implemented")
+}
+func (*UnimplementedCAServer) Sign(ctx context.Context, req *SignRequest) (*SignResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Sign not implemented")
+}
+func (*UnimplementedCAServer) SignIntermediate(ctx context.Context, req *SignIntermediateRequest) (*SignIntermediateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignIntermediate not implemented")
+}
+func (*UnimplementedCAServer) CrossSignCA(ctx context.Context, req *CrossSignCARequest) (*CrossSignCAResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CrossSignCA not implemented")
+}
+func (*UnimplementedCAServer) Cleanup(ctx context.Context, req *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Cleanup not implemented")
 }
 
 func RegisterCAServer(s *grpc.Server, srv CAServer) {
