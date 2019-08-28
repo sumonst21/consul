@@ -3680,6 +3680,7 @@ func TestFullConfig(t *testing.T) {
 			},
 			"enable_acl_replication": true,
 			"enable_agent_tls_for_checks": true,
+			"enable_backend_streaming": true,
 			"enable_central_service_config": true,
 			"enable_debug": true,
 			"enable_script_checks": true,
@@ -4279,6 +4280,7 @@ func TestFullConfig(t *testing.T) {
 			}
 			enable_acl_replication = true
 			enable_agent_tls_for_checks = true
+			enable_backend_streaming = true
 			enable_central_service_config = true
 			enable_debug = true
 			enable_script_checks = true
@@ -4965,6 +4967,7 @@ func TestFullConfig(t *testing.T) {
 		DiscardCheckOutput:               true,
 		DiscoveryMaxStale:                5 * time.Second,
 		EnableAgentTLSForChecks:          true,
+		EnableBackendStreaming:           true,
 		EnableCentralServiceConfig:       true,
 		EnableDebug:                      true,
 		EnableRemoteScriptChecks:         true,
@@ -5817,6 +5820,7 @@ func TestSanitize(t *testing.T) {
 		"DiscardCheckOutput": false,
 		"DiscoveryMaxStale": "0s",
 		"EnableAgentTLSForChecks": false,
+		"EnableBackendStreaming": false,
 		"EnableDebug": false,
 		"EnableCentralServiceConfig": false,
 		"EnableLocalScriptChecks": false,
