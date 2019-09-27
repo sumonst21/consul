@@ -96,11 +96,10 @@ func Test_makeLoadAssignment(t *testing.T) {
 
 	// TODO(rb): test onlypassing
 	tests := []struct {
-		name                   string
-		clusterName            string
-		overprovisioningFactor int
-		endpoints              []loadAssignmentEndpointGroup
-		want                   *envoy.ClusterLoadAssignment
+		name        string
+		clusterName string
+		endpoints   []loadAssignmentEndpointGroup
+		want        *envoy.ClusterLoadAssignment
 	}{
 		{
 			name:        "no instances",
@@ -210,7 +209,6 @@ func Test_makeLoadAssignment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := makeLoadAssignment(
 				tt.clusterName,
-				tt.overprovisioningFactor,
 				tt.endpoints,
 				"dc1",
 			)
@@ -246,27 +244,59 @@ func Test_endpointsFromSnapshot(t *testing.T) {
 			setup:  nil,
 		},
 		{
+			name:   "connect-proxy-with-chain-external-sni",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainExternalSNI,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-chain-and-overrides",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithOverrides,
+			setup:  nil,
+		},
+		{
 			name:   "connect-proxy-with-chain-and-failover",
 			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailover,
 			setup:  nil,
 		},
 		{
-			name:   "connect-proxy-with-chain-and-sliding-failover",
-			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailover,
-			setup: func(snap *proxycfg.ConfigSnapshot) {
-				chain := snap.ConnectProxy.DiscoveryChain["db"]
-
-				dbTarget := structs.DiscoveryTarget{
-					Service:    "db",
-					Namespace:  "default",
-					Datacenter: "dc1",
-				}
-				dbResolverNode := chain.GroupResolverNodes[dbTarget]
-
-				groupResolverFailover := dbResolverNode.GroupResolver.Failover
-
-				groupResolverFailover.Definition.OverprovisioningFactor = 160
-			},
+			name:   "connect-proxy-with-tcp-chain-failover-through-remote-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughRemoteGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-remote-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughRemoteGatewayTriggered,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-remote-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughRemoteGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-remote-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughRemoteGatewayTriggered,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-local-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughLocalGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-local-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughLocalGatewayTriggered,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-local-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughLocalGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-local-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughLocalGatewayTriggered,
+			setup:  nil,
 		},
 		{
 			name:   "splitter-with-resolver-redirect",

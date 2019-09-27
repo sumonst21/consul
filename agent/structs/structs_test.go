@@ -165,12 +165,6 @@ func testServiceNode(t *testing.T) *ServiceNode {
 			ModifyIndex: 2,
 		},
 		ServiceProxy: TestConnectProxyConfig(t),
-		// DEPRECATED (ProxyDestination) - remove this when removing ProxyDestination
-		// ServiceProxyDestination is deprecated bit must be set consistently with
-		// the value of ServiceProxy.DestinationServiceName otherwise a round-trip
-		// through ServiceNode -> NodeService and back will not match and fail
-		// tests.
-		ServiceProxyDestination: "web",
 		ServiceConnect: ServiceConnect{
 			Native: true,
 		},
@@ -249,7 +243,6 @@ func TestStructs_ServiceNode_IsSameService(t *testing.T) {
 	serviceTags := sn.ServiceTags
 	serviceWeights := Weights{Passing: 2, Warning: 1}
 	sn.ServiceWeights = serviceWeights
-	serviceProxyDestination := sn.ServiceProxyDestination
 	serviceProxy := sn.ServiceProxy
 	serviceConnect := sn.ServiceConnect
 	serviceTaggedAddresses := sn.ServiceTaggedAddresses
@@ -282,7 +275,6 @@ func TestStructs_ServiceNode_IsSameService(t *testing.T) {
 	check(func() { other.ServiceMeta = map[string]string{"my": "meta"} }, func() { other.ServiceMeta = serviceMeta })
 	check(func() { other.ServiceName = "duck" }, func() { other.ServiceName = serviceName })
 	check(func() { other.ServicePort = 65534 }, func() { other.ServicePort = servicePort })
-	check(func() { other.ServiceProxyDestination = "duck" }, func() { other.ServiceProxyDestination = serviceProxyDestination })
 	check(func() { other.ServiceTags = []string{"new", "tags"} }, func() { other.ServiceTags = serviceTags })
 	check(func() { other.ServiceWeights = Weights{Passing: 42, Warning: 41} }, func() { other.ServiceWeights = serviceWeights })
 	check(func() { other.ServiceProxy = ConnectProxyConfig{} }, func() { other.ServiceProxy = serviceProxy })
@@ -385,10 +377,6 @@ func TestStructs_NodeService_ValidateMeshGateway(t *testing.T) {
 			func(x *NodeService) { x.Connect.SidecarService = &ServiceDefinition{} },
 			"cannot have a sidecar service",
 		},
-		"connect-managed-proxy": testCase{
-			func(x *NodeService) { x.Connect.Proxy = &ServiceDefinitionConnectProxy{} },
-			"Connect.Proxy configuration is invalid",
-		},
 		"proxy-destination-name": testCase{
 			func(x *NodeService) { x.Proxy.DestinationServiceName = "foo" },
 			"Proxy.DestinationServiceName configuration is invalid",
@@ -439,19 +427,19 @@ func TestStructs_NodeService_ValidateConnectProxy(t *testing.T) {
 		},
 
 		{
-			"connect-proxy: no ProxyDestination",
+			"connect-proxy: no Proxy.DestinationServiceName",
 			func(x *NodeService) { x.Proxy.DestinationServiceName = "" },
 			"Proxy.DestinationServiceName must be",
 		},
 
 		{
-			"connect-proxy: whitespace ProxyDestination",
+			"connect-proxy: whitespace Proxy.DestinationServiceName",
 			func(x *NodeService) { x.Proxy.DestinationServiceName = "  " },
 			"Proxy.DestinationServiceName must be",
 		},
 
 		{
-			"connect-proxy: valid ProxyDestination",
+			"connect-proxy: valid Proxy.DestinationServiceName",
 			func(x *NodeService) { x.Proxy.DestinationServiceName = "hello" },
 			"",
 		},
@@ -466,6 +454,206 @@ func TestStructs_NodeService_ValidateConnectProxy(t *testing.T) {
 			"connect-proxy: ConnectNative set",
 			func(x *NodeService) { x.Connect.Native = true },
 			"cannot also be",
+		},
+
+		{
+			"connect-proxy: upstream missing type (defaulted)",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{{
+					DestinationName: "foo",
+					LocalBindPort:   5000,
+				}}
+			},
+			"",
+		},
+		{
+			"connect-proxy: upstream invalid type",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{{
+					DestinationType: "garbage",
+					DestinationName: "foo",
+					LocalBindPort:   5000,
+				}}
+			},
+			"unknown upstream destination type",
+		},
+		{
+			"connect-proxy: upstream empty name",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{{
+					DestinationType: UpstreamDestTypeService,
+					LocalBindPort:   5000,
+				}}
+			},
+			"upstream destination name cannot be empty",
+		},
+		{
+			"connect-proxy: upstream empty bind port",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{{
+					DestinationType: UpstreamDestTypeService,
+					DestinationName: "foo",
+					LocalBindPort:   0,
+				}}
+			},
+			"upstream local bind port cannot be zero",
+		},
+		{
+			"connect-proxy: Upstreams almost-but-not-quite-duplicated in various ways",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{ // baseline
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						LocalBindPort:   5000,
+					},
+					{ // different bind address
+						DestinationType:  UpstreamDestTypeService,
+						DestinationName:  "bar",
+						LocalBindAddress: "127.0.0.2",
+						LocalBindPort:    5000,
+					},
+					{ // different datacenter
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						Datacenter:      "dc2",
+						LocalBindPort:   5001,
+					},
+					{ // explicit default namespace
+						DestinationType:      UpstreamDestTypeService,
+						DestinationName:      "foo",
+						DestinationNamespace: "default",
+						LocalBindPort:        5003,
+					},
+					{ // different namespace
+						DestinationType:      UpstreamDestTypeService,
+						DestinationName:      "foo",
+						DestinationNamespace: "alternate",
+						LocalBindPort:        5002,
+					},
+					{ // different type
+						DestinationType: UpstreamDestTypePreparedQuery,
+						DestinationName: "foo",
+						LocalBindPort:   5004,
+					},
+				}
+			},
+			"",
+		},
+		{
+			"connect-proxy: Upstreams duplicated by port",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						LocalBindPort:   5000,
+					},
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						LocalBindPort:   5000,
+					},
+				}
+			},
+			"upstreams cannot contain duplicates",
+		},
+		{
+			"connect-proxy: Upstreams duplicated by ip and port",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{
+						DestinationType:  UpstreamDestTypeService,
+						DestinationName:  "foo",
+						LocalBindAddress: "127.0.0.2",
+						LocalBindPort:    5000,
+					},
+					{
+						DestinationType:  UpstreamDestTypeService,
+						DestinationName:  "bar",
+						LocalBindAddress: "127.0.0.2",
+						LocalBindPort:    5000,
+					},
+				}
+			},
+			"upstreams cannot contain duplicates",
+		},
+		{
+			"connect-proxy: Upstreams duplicated by ip and port with ip defaulted in one",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						LocalBindPort:   5000,
+					},
+					{
+						DestinationType:  UpstreamDestTypeService,
+						DestinationName:  "foo",
+						LocalBindAddress: "127.0.0.1",
+						LocalBindPort:    5000,
+					},
+				}
+			},
+			"upstreams cannot contain duplicates",
+		},
+		{
+			"connect-proxy: Upstreams duplicated by name",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						LocalBindPort:   5000,
+					},
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						LocalBindPort:   5001,
+					},
+				}
+			},
+			"upstreams cannot contain duplicates",
+		},
+		{
+			"connect-proxy: Upstreams duplicated by name and datacenter",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						Datacenter:      "dc2",
+						LocalBindPort:   5000,
+					},
+					{
+						DestinationType: UpstreamDestTypeService,
+						DestinationName: "foo",
+						Datacenter:      "dc2",
+						LocalBindPort:   5001,
+					},
+				}
+			},
+			"upstreams cannot contain duplicates",
+		},
+		{
+			"connect-proxy: Upstreams duplicated by name and namespace",
+			func(x *NodeService) {
+				x.Proxy.Upstreams = Upstreams{
+					{
+						DestinationType:      UpstreamDestTypeService,
+						DestinationName:      "foo",
+						DestinationNamespace: "alternate",
+						LocalBindPort:        5000,
+					},
+					{
+						DestinationType:      UpstreamDestTypeService,
+						DestinationName:      "foo",
+						DestinationNamespace: "alternate",
+						LocalBindPort:        5001,
+					},
+				}
+			},
+			"upstreams cannot contain duplicates",
 		},
 	}
 
@@ -512,16 +700,6 @@ func TestStructs_NodeService_ValidateSidecarService(t *testing.T) {
 				}
 			},
 			"SidecarService cannot have a nested SidecarService",
-		},
-
-		{
-			"Sidecar can't have managed proxy",
-			func(x *NodeService) {
-				x.Connect.SidecarService.Connect = &ServiceConnect{
-					Proxy: &ServiceDefinitionConnectProxy{},
-				}
-			},
-			"SidecarService cannot have a managed proxy",
 		},
 	}
 

@@ -53,14 +53,15 @@ const (
 // services
 type MeshGatewayConfig struct {
 	// Mode is the mode that should be used for the upstream connection.
-	Mode MeshGatewayMode
+	Mode MeshGatewayMode `json:",omitempty"`
 }
 
 type ServiceConfigEntry struct {
 	Kind        string
 	Name        string
-	Protocol    string
-	MeshGateway MeshGatewayConfig
+	Protocol    string            `json:",omitempty"`
+	MeshGateway MeshGatewayConfig `json:",omitempty"`
+	ExternalSNI string            `json:",omitempty"`
 	CreateIndex uint64
 	ModifyIndex uint64
 }
@@ -84,8 +85,8 @@ func (s *ServiceConfigEntry) GetModifyIndex() uint64 {
 type ProxyConfigEntry struct {
 	Kind        string
 	Name        string
-	Config      map[string]interface{}
-	MeshGateway MeshGatewayConfig
+	Config      map[string]interface{} `json:",omitempty"`
+	MeshGateway MeshGatewayConfig      `json:",omitempty"`
 	CreateIndex uint64
 	ModifyIndex uint64
 }
@@ -132,18 +133,17 @@ func MakeConfigEntry(kind, name string) (ConfigEntry, error) {
 	return makeConfigEntry(kind, name)
 }
 
-// DEPRECATED: TODO(rb): remove?
+// DecodeConfigEntry will decode the result of using json.Unmarshal of a config
+// entry into a map[string]interface{}.
 //
-// DecodeConfigEntry only successfully works on config entry kinds
-// "service-defaults" and "proxy-defaults" (as of Consul 1.5).
+// Important caveats:
 //
-// This is because by parsing HCL into map[string]interface{} and then trying
-// to decode it with mapstructure we run into the problem where hcl generically
-// decodes many things into map[string][]interface{} at intermediate nodes in
-// the resulting structure (for nested structs not otherwise in an enclosing
-// slice). This breaks decoding.
+// - This will NOT work if the map[string]interface{} was produced using HCL
+// decoding as that requires more extensive parsing to work around the issues
+// with map[string][]interface{} that arise.
 //
-// Until a better solution is arrived at don't use this method.
+// - This will only decode fields using their camel case json field
+// representations.
 func DecodeConfigEntry(raw map[string]interface{}) (ConfigEntry, error) {
 	var entry ConfigEntry
 
@@ -188,7 +188,19 @@ func DecodeConfigEntryFromJSON(data []byte) (ConfigEntry, error) {
 	return DecodeConfigEntry(raw)
 }
 
-// Config can be used to query the Config endpoints
+func decodeConfigEntrySlice(raw []map[string]interface{}) ([]ConfigEntry, error) {
+	var entries []ConfigEntry
+	for _, rawEntry := range raw {
+		entry, err := DecodeConfigEntry(rawEntry)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+// ConfigEntries can be used to query the Config endpoints
 type ConfigEntries struct {
 	c *Client
 }
@@ -251,13 +263,9 @@ func (conf *ConfigEntries) List(kind string, q *QueryOptions) ([]ConfigEntry, *Q
 		return nil, nil, err
 	}
 
-	var entries []ConfigEntry
-	for _, rawEntry := range raw {
-		entry, err := DecodeConfigEntry(rawEntry)
-		if err != nil {
-			return nil, nil, err
-		}
-		entries = append(entries, entry)
+	entries, err := decodeConfigEntrySlice(raw)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return entries, qm, nil

@@ -407,11 +407,11 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 		{
 			desc: "-encrypt",
 			args: []string{
-				`-encrypt=i0P+gFTkLPg0h53eNYjydg==`,
+				`-encrypt=pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s=`,
 				`-data-dir=` + dataDir,
 			},
 			patch: func(rt *RuntimeConfig) {
-				rt.EncryptKey = "i0P+gFTkLPg0h53eNYjydg=="
+				rt.EncryptKey = "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s="
 				rt.DataDir = dataDir
 			},
 		},
@@ -2023,40 +2023,6 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 			err: "sidecar_service can't have a nested sidecar_service",
 		},
 		{
-			desc: "sidecar_service can't have managed proxy",
-			args: []string{
-				`-data-dir=` + dataDir,
-			},
-			json: []string{`{
-				  "service": {
-						"name": "web",
-						"port": 1234,
-						"connect": {
-							"sidecar_service": {
-								"connect": {
-									"proxy": {}
-								}
-							}
-						}
-					}
-				}`},
-			hcl: []string{`
-				service {
-					name = "web"
-					port = 1234
-					connect {
-						sidecar_service {
-							connect {
-								proxy {
-								}
-							}
-						}
-					}
-				}
-			`},
-			err: "sidecar_service can't have a managed proxy",
-		},
-		{
 			desc: "telemetry.prefix_filter cannot be empty",
 			args: []string{
 				`-data-dir=` + dataDir,
@@ -2104,14 +2070,14 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 			args: []string{
 				`-data-dir=` + dataDir,
 			},
-			json: []string{`{ "encrypt": "i0P+gFTkLPg0h53eNYjydg==" }`},
-			hcl:  []string{` encrypt = "i0P+gFTkLPg0h53eNYjydg==" `},
+			json: []string{`{ "encrypt": "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s=" }`},
+			hcl:  []string{` encrypt = "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s=" `},
 			patch: func(rt *RuntimeConfig) {
-				rt.EncryptKey = "i0P+gFTkLPg0h53eNYjydg=="
+				rt.EncryptKey = "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s="
 				rt.DataDir = dataDir
 			},
 			pre: func() {
-				writeFile(filepath.Join(dataDir, SerfLANKeyring), []byte("i0P+gFTkLPg0h53eNYjydg=="))
+				writeFile(filepath.Join(dataDir, SerfLANKeyring), []byte("pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s="))
 			},
 			warns: []string{`WARNING: LAN keyring exists but -encrypt given, using keyring`},
 		},
@@ -2120,17 +2086,17 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 			args: []string{
 				`-data-dir=` + dataDir,
 			},
-			json: []string{`{ "encrypt": "i0P+gFTkLPg0h53eNYjydg==", "server": true }`},
-			hcl:  []string{` encrypt = "i0P+gFTkLPg0h53eNYjydg==" server = true `},
+			json: []string{`{ "encrypt": "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s=", "server": true }`},
+			hcl:  []string{` encrypt = "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s=" server = true `},
 			patch: func(rt *RuntimeConfig) {
-				rt.EncryptKey = "i0P+gFTkLPg0h53eNYjydg=="
+				rt.EncryptKey = "pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s="
 				rt.ServerMode = true
 				rt.LeaveOnTerm = false
 				rt.SkipLeaveOnInt = true
 				rt.DataDir = dataDir
 			},
 			pre: func() {
-				writeFile(filepath.Join(dataDir, SerfWANKeyring), []byte("i0P+gFTkLPg0h53eNYjydg=="))
+				writeFile(filepath.Join(dataDir, SerfWANKeyring), []byte("pUqJrVyVRj5jsiYEkM/tFQYfWyJIv4s3XkvDwy7Cu5s="))
 			},
 			warns: []string{`WARNING: WAN keyring exists but -encrypt given, using keyring`},
 		},
@@ -2352,176 +2318,6 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 		},
 
 		{
-			desc: "Service managed proxy 'upstreams'",
-			args: []string{
-				`-data-dir=` + dataDir,
-			},
-			json: []string{
-				`{
-						"service": {
-							"name": "web",
-							"port": 8080,
-							"connect": {
-								"proxy": {
-									"upstreams": [{
-										"destination_name": "db",
-										"local_bind_port": 1234
-									}]
-								}
-							}
-						}
-					}`,
-			},
-			hcl: []string{
-				`service {
-					name = "web"
-					port = 8080
-					connect {
-						proxy {
-							upstreams {
-								destination_name = "db"
-								local_bind_port = 1234
-							}
-						}
-					}
-				}`,
-			},
-			patch: func(rt *RuntimeConfig) {
-				rt.DataDir = dataDir
-				rt.Services = []*structs.ServiceDefinition{
-					&structs.ServiceDefinition{
-						Name: "web",
-						Port: 8080,
-						Connect: &structs.ServiceConnect{
-							Proxy: &structs.ServiceDefinitionConnectProxy{
-								Upstreams: structs.Upstreams{
-									{
-										DestinationName: "db",
-										DestinationType: structs.UpstreamDestTypeService,
-										LocalBindPort:   1234,
-									},
-								},
-							},
-						},
-						Weights: &structs.Weights{
-							Passing: 1,
-							Warning: 1,
-						},
-					},
-				}
-			},
-		},
-
-		{
-			desc: "Multiple service managed proxy 'upstreams'",
-			args: []string{
-				`-data-dir=` + dataDir,
-			},
-			json: []string{
-				`{
-						"service": {
-							"name": "web",
-							"port": 8080,
-							"connect": {
-								"proxy": {
-									"upstreams": [{
-										"destination_name": "db",
-										"local_bind_port": 1234
-									}, {
-										"destination_name": "cache",
-										"local_bind_port": 2345
-									}]
-								}
-							}
-						}
-					}`,
-			},
-			hcl: []string{
-				`service {
-					name = "web"
-					port = 8080
-					connect {
-						proxy {
-							upstreams = [
-								{
-									destination_name = "db"
-									local_bind_port = 1234
-								},
-							  {
-									destination_name = "cache"
-									local_bind_port = 2345
-								}
-							]
-						}
-					}
-				}`,
-			},
-			patch: func(rt *RuntimeConfig) {
-				rt.DataDir = dataDir
-				rt.Services = []*structs.ServiceDefinition{
-					&structs.ServiceDefinition{
-						Name: "web",
-						Port: 8080,
-						Connect: &structs.ServiceConnect{
-							Proxy: &structs.ServiceDefinitionConnectProxy{
-								Upstreams: structs.Upstreams{
-									{
-										DestinationName: "db",
-										DestinationType: structs.UpstreamDestTypeService,
-										LocalBindPort:   1234,
-									},
-									{
-										DestinationName: "cache",
-										DestinationType: structs.UpstreamDestTypeService,
-										LocalBindPort:   2345,
-									},
-								},
-							},
-						},
-						Weights: &structs.Weights{
-							Passing: 1,
-							Warning: 1,
-						},
-					},
-				}
-			},
-		},
-
-		{
-			desc: "enabling Connect allow_managed_root",
-			args: []string{
-				`-data-dir=` + dataDir,
-			},
-			json: []string{
-				`{ "connect": { "proxy": { "allow_managed_root": true } } }`,
-			},
-			hcl: []string{
-				`connect { proxy { allow_managed_root = true } }`,
-			},
-			patch: func(rt *RuntimeConfig) {
-				rt.DataDir = dataDir
-				rt.ConnectProxyAllowManagedRoot = true
-			},
-		},
-
-		{
-			desc: "enabling Connect allow_managed_api_registration",
-			args: []string{
-				`-data-dir=` + dataDir,
-			},
-			json: []string{
-				`{ "connect": { "proxy": { "allow_managed_api_registration": true } } }`,
-			},
-			hcl: []string{
-				`connect { proxy { allow_managed_api_registration = true } }`,
-			},
-			patch: func(rt *RuntimeConfig) {
-				rt.DataDir = dataDir
-				rt.ConnectProxyAllowManagedAPIRegistration = true
-			},
-		},
-
-		{
 			// This tests that we correct added the nested paths to arrays of objects
 			// to the exceptions in PatchSliceOfMaps in config.go (for single service)
 			desc: "service.connectsidecar_service with checks and upstreams",
@@ -2730,6 +2526,79 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 				rt.VerifyServerHostname = true
 				rt.VerifyOutgoing = true
 			},
+		},
+		{
+			desc: "auto_encrypt.allow works implies connect",
+			args: []string{
+				`-data-dir=` + dataDir,
+			},
+			json: []string{`{
+			  "verify_incoming": true,
+			  "auto_encrypt": { "allow_tls": true }
+			}`},
+			hcl: []string{`
+			  verify_incoming = true
+			  auto_encrypt { allow_tls = true }
+			`},
+			patch: func(rt *RuntimeConfig) {
+				rt.DataDir = dataDir
+				rt.VerifyIncoming = true
+				rt.AutoEncryptAllowTLS = true
+				rt.ConnectEnabled = true
+			},
+		},
+		{
+			desc: "auto_encrypt.allow works with verify_incoming",
+			args: []string{
+				`-data-dir=` + dataDir,
+			},
+			json: []string{`{
+			  "verify_incoming": true,
+			  "auto_encrypt": { "allow_tls": true }
+			}`},
+			hcl: []string{`
+			  verify_incoming = true
+			  auto_encrypt { allow_tls = true }
+			`},
+			patch: func(rt *RuntimeConfig) {
+				rt.DataDir = dataDir
+				rt.VerifyIncoming = true
+				rt.AutoEncryptAllowTLS = true
+				rt.ConnectEnabled = true
+			},
+		},
+		{
+			desc: "auto_encrypt.allow works with verify_incoming_rpc",
+			args: []string{
+				`-data-dir=` + dataDir,
+			},
+			json: []string{`{
+			  "verify_incoming_rpc": true,
+			  "auto_encrypt": { "allow_tls": true }
+			}`},
+			hcl: []string{`
+			  verify_incoming_rpc = true
+			  auto_encrypt { allow_tls = true }
+			`},
+			patch: func(rt *RuntimeConfig) {
+				rt.DataDir = dataDir
+				rt.VerifyIncomingRPC = true
+				rt.AutoEncryptAllowTLS = true
+				rt.ConnectEnabled = true
+			},
+		},
+		{
+			desc: "auto_encrypt.allow fails without verify_incoming or verify_incoming_rpc",
+			args: []string{
+				`-data-dir=` + dataDir,
+			},
+			json: []string{`{
+			  "auto_encrypt": { "allow_tls": true }
+			}`},
+			hcl: []string{`
+			  auto_encrypt { allow_tls = true }
+			`},
+			err: "if auto_encrypt.allow_tls is turned on, either verify_incoming or verify_incoming_rpc must be enabled.",
 		},
 		{
 			desc: "test connect vault provider configuration",
@@ -2987,6 +2856,7 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 							"kind": "service-defaults",
 							"name": "web",
 							"protocol": "http",
+							"external_sni": "abc-123",
 							"mesh_gateway": {
 								"mode": "remote"
 							}
@@ -3000,6 +2870,7 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 						kind = "service-defaults"
 						name = "web"
 						protocol = "http"
+						external_sni = "abc-123"
 						mesh_gateway {
 							mode = "remote"
 						}
@@ -3009,9 +2880,10 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 				rt.DataDir = dataDir
 				rt.ConfigEntryBootstrap = []structs.ConfigEntry{
 					&structs.ServiceConfigEntry{
-						Kind:     structs.ServiceDefaults,
-						Name:     "web",
-						Protocol: "http",
+						Kind:        structs.ServiceDefaults,
+						Name:        "web",
+						Protocol:    "http",
+						ExternalSNI: "abc-123",
 						MeshGateway: structs.MeshGatewayConfig{
 							Mode: structs.MeshGatewayModeRemote,
 						},
@@ -3029,6 +2901,7 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 							"Kind": "service-defaults",
 							"Name": "web",
 							"Protocol": "http",
+							"ExternalSNI": "abc-123",
 							"MeshGateway": {
 								"Mode": "remote"
 							}
@@ -3042,6 +2915,7 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 						Kind = "service-defaults"
 						Name = "web"
 						Protocol = "http"
+						ExternalSNI = "abc-123"
 						MeshGateway {
 							Mode = "remote"
 						}
@@ -3051,9 +2925,10 @@ func TestConfigFlagsAndEdgecases(t *testing.T) {
 				rt.DataDir = dataDir
 				rt.ConfigEntryBootstrap = []structs.ConfigEntry{
 					&structs.ServiceConfigEntry{
-						Kind:     structs.ServiceDefaults,
-						Name:     "web",
-						Protocol: "http",
+						Kind:        structs.ServiceDefaults,
+						Name:        "web",
+						Protocol:    "http",
+						ExternalSNI: "abc-123",
 						MeshGateway: structs.MeshGatewayConfig{
 							Mode: structs.MeshGatewayModeRemote,
 						},
@@ -3659,17 +3534,7 @@ func TestFullConfig(t *testing.T) {
 					"csr_max_per_second": 100,
 					"csr_max_concurrent": 2
 				},
-				"enabled": true,
-				"proxy_defaults": {
-					"exec_mode": "script",
-					"daemon_command": ["consul", "connect", "proxy"],
-					"script_command": ["proxyctl.sh"],
-					"config": {
-						"foo": "bar",
-						"connect_timeout_ms": 1000,
-						"pedantic_mode": true
-					}
-				}
+				"enabled": true
 			},
 			"gossip_lan" : {
 				"gossip_nodes": 6,
@@ -3761,8 +3626,6 @@ func TestFullConfig(t *testing.T) {
 				"https": 15127,
 				"server": 3757,
 				"grpc": 4881,
-				"proxy_min_port": 2000,
-				"proxy_max_port": 3000,
 				"sidecar_min_port": 8888,
 				"sidecar_max_port": 9999
 			},
@@ -3993,15 +3856,7 @@ func TestFullConfig(t *testing.T) {
 							"deregister_critical_service_after": "68482s"
 						}
 					],
-					"connect": {
-						"proxy": {
-							"exec_mode": "daemon",
-							"command": ["awesome-proxy"],
-							"config": {
-								"foo": "qux"
-							}
-						}
-					}
+					"connect": {}
 				},
 				{
 					"id": "Kh81CPF6",
@@ -4264,18 +4119,6 @@ func TestFullConfig(t *testing.T) {
 					csr_max_concurrent = 2.0
 				}
 				enabled = true
-				proxy_defaults {
-					exec_mode = "script"
-					daemon_command = ["consul", "connect", "proxy"]
-					script_command = ["proxyctl.sh"]
-					config = {
-						foo = "bar"
-						# hack float since json parses numbers as float and we have to
-						# assert against the same thing
-						connect_timeout_ms = 1000.0
-						pedantic_mode = true
-					}
-				}
 			}
 			gossip_lan {
 				gossip_nodes    = 6
@@ -4598,15 +4441,7 @@ func TestFullConfig(t *testing.T) {
 							deregister_critical_service_after = "68482s"
 						}
 					]
-					connect {
-						proxy {
-							exec_mode = "daemon"
-							command = ["awesome-proxy"]
-							config = {
-								foo = "qux"
-							}
-						}
-					}
+					connect {}
 				},
 				{
 					id = "Kh81CPF6"
@@ -4957,29 +4792,17 @@ func TestFullConfig(t *testing.T) {
 				},
 			},
 		},
-		AutoEncryptTLS:          true,
-		AutoEncryptAllowTLS:     true,
-		ConnectEnabled:          true,
-		ConnectProxyBindMinPort: 2000,
-		ConnectProxyBindMaxPort: 3000,
-		ConnectSidecarMinPort:   8888,
-		ConnectSidecarMaxPort:   9999,
-		ConnectCAProvider:       "consul",
+		AutoEncryptTLS:        true,
+		AutoEncryptAllowTLS:   true,
+		ConnectEnabled:        true,
+		ConnectSidecarMinPort: 8888,
+		ConnectSidecarMaxPort: 9999,
+		ConnectCAProvider:     "consul",
 		ConnectCAConfig: map[string]interface{}{
 			"RotationPeriod":   "90h",
 			"LeafCertTTL":      "1h",
 			"CSRMaxPerSecond":  float64(100),
 			"CSRMaxConcurrent": float64(2),
-		},
-		ConnectProxyAllowManagedRoot:            false,
-		ConnectProxyAllowManagedAPIRegistration: false,
-		ConnectProxyDefaultExecMode:             "script",
-		ConnectProxyDefaultDaemonCommand:        []string{"consul", "connect", "proxy"},
-		ConnectProxyDefaultScriptCommand:        []string{"proxyctl.sh"},
-		ConnectProxyDefaultConfig: map[string]interface{}{
-			"foo":                "bar",
-			"connect_timeout_ms": float64(1000),
-			"pedantic_mode":      true,
 		},
 		DNSAddrs:                         []net.Addr{tcpAddr("93.95.95.81:7001"), udpAddr("93.95.95.81:7001")},
 		DNSARecordLimit:                  29907,
@@ -5189,15 +5012,7 @@ func TestFullConfig(t *testing.T) {
 						DeregisterCriticalServiceAfter: 68482 * time.Second,
 					},
 				},
-				Connect: &structs.ServiceConnect{
-					Proxy: &structs.ServiceDefinitionConnectProxy{
-						ExecMode: "daemon",
-						Command:  []string{"awesome-proxy"},
-						Config: map[string]interface{}{
-							"foo": "qux",
-						},
-					},
-				},
+				Connect: &structs.ServiceConnect{},
 			},
 			{
 				ID:   "Kh81CPF6",
@@ -5796,18 +5611,9 @@ func TestSanitize(t *testing.T) {
 		"ConnectCAConfig": {},
 		"ConnectCAProvider": "",
 		"ConnectEnabled": false,
-		"ConnectProxyAllowManagedAPIRegistration": false,
-		"ConnectProxyAllowManagedRoot": false,
-		"ConnectProxyBindMaxPort": 0,
-		"ConnectProxyBindMinPort": 0,
-		"ConnectProxyDefaultConfig": {},
-		"ConnectProxyDefaultDaemonCommand": [],
-		"ConnectProxyDefaultExecMode": "",
-		"ConnectProxyDefaultScriptCommand": [],
 		"ConnectSidecarMaxPort": 0,
 		"ConnectSidecarMinPort": 0,
 		"ConnectTestCALeafRootChangeSpread": "0s",
-		"ConnectTestDisableManagedProxies": false,
 		"ConsulCoordinateUpdateBatchSize": 0,
 		"ConsulCoordinateUpdateMaxBatches": 0,
 		"ConsulCoordinateUpdatePeriod": "15s",
@@ -5974,7 +5780,6 @@ func TestSanitize(t *testing.T) {
 			"Name": "foo",
 			"Port": 0,
 			"Proxy": null,
-			"ProxyDestination": "",
 			"TaggedAddresses": {},
 			"Tags": [],
 			"Token": "hidden",

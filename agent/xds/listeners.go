@@ -20,6 +20,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 
+	"github.com/hashicorp/consul/agent/connect"
 	"github.com/hashicorp/consul/agent/proxycfg"
 	"github.com/hashicorp/consul/agent/structs"
 )
@@ -61,7 +62,7 @@ func (s *Server) listenersFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnaps
 
 		var upstreamListener proto.Message
 		if chain == nil || chain.IsDefault() {
-			upstreamListener, err = s.makeUpstreamListener(&u, cfgSnap)
+			upstreamListener, err = s.makeUpstreamListenerIgnoreDiscoveryChain(&u, chain, cfgSnap)
 		} else {
 			upstreamListener, err = s.makeUpstreamListenerForDiscoveryChain(&u, chain, cfgSnap)
 		}
@@ -269,7 +270,12 @@ func (s *Server) makePublicListener(cfgSnap *proxycfg.ConfigSnapshot, token stri
 	return l, err
 }
 
-func (s *Server) makeUpstreamListener(u *structs.Upstream, cfgSnap *proxycfg.ConfigSnapshot) (proto.Message, error) {
+// makeUpstreamListenerIgnoreDiscoveryChain counterintuitively takes an (optional) chain
+func (s *Server) makeUpstreamListenerIgnoreDiscoveryChain(
+	u *structs.Upstream,
+	chain *structs.CompiledDiscoveryChain,
+	cfgSnap *proxycfg.ConfigSnapshot,
+) (proto.Message, error) {
 	cfg, err := ParseUpstreamConfig(u.Config)
 	if err != nil {
 		// Don't hard fail on a config typo, just warn. The parse func returns
@@ -288,7 +294,13 @@ func (s *Server) makeUpstreamListener(u *structs.Upstream, cfgSnap *proxycfg.Con
 
 	upstreamID := u.Identifier()
 
-	clusterName := UpstreamSNI(u, "", cfgSnap)
+	dc := u.Datacenter
+	if dc == "" {
+		dc = cfgSnap.Datacenter
+	}
+	sni := connect.UpstreamSNI(u, "", dc, cfgSnap.Roots.TrustDomain)
+
+	clusterName := CustomizeClusterName(sni, chain)
 
 	l := makeListener(upstreamID, addr, u.LocalBindPort)
 	filter, err := makeListenerFilter(false, cfg.Protocol, upstreamID, clusterName, "upstream_", false)
@@ -337,7 +349,7 @@ func (s *Server) makeGatewayListener(name, addr string, port int, cfgSnap *proxy
 	// TODO (mesh-gateway) - Do we need to create clusters for all the old trust domains as well?
 	// We need 1 Filter Chain per datacenter
 	for dc := range cfgSnap.MeshGateway.GatewayGroups {
-		clusterName := DatacenterSNI(dc, cfgSnap)
+		clusterName := connect.DatacenterSNI(dc, cfgSnap.Roots.TrustDomain)
 		filterName := fmt.Sprintf("%s_%s", name, dc)
 		dcTCPProxy, err := makeTCPProxyFilter(filterName, clusterName, "mesh_gateway_remote_")
 		if err != nil {
@@ -366,13 +378,16 @@ func (s *Server) makeUpstreamListenerForDiscoveryChain(
 	chain *structs.CompiledDiscoveryChain,
 	cfgSnap *proxycfg.ConfigSnapshot,
 ) (proto.Message, error) {
-	// TODO(rb): make the listener escape hatch work again
 	cfg, err := ParseUpstreamConfigNoDefaults(u.Config)
 	if err != nil {
 		// Don't hard fail on a config typo, just warn. The parse func returns
 		// default config if there is an error so it's safe to continue.
 		s.Logger.Printf("[WARN] envoy: failed to parse Upstream[%s].Config: %s",
 			u.Identifier(), err)
+	}
+	if cfg.ListenerJSON != "" {
+		s.Logger.Printf("[WARN] envoy: ignoring escape hatch setting Upstream[%s].Config[%s] because a discovery chain for %q is configured",
+			u.Identifier(), "envoy_listener_json", chain.ServiceName)
 	}
 
 	addr := u.LocalBindAddress

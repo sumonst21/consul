@@ -88,15 +88,16 @@ The options below are all specified on the command-line.
   for internal cluster communications.
   This is an IP address that should be reachable by all other nodes in the cluster.
   By default, this is "0.0.0.0", meaning Consul will bind to all addresses on
-the local machine and will [advertise](/docs/agent/options.html#_advertise)
-the first available private IPv4 address to the rest of the cluster. If there
-are **multiple private IPv4 addresses** available, Consul will exit with an error
-at startup. If you specify "[::]", Consul will
-[advertise](/docs/agent/options.html#_advertise) the first available public
-IPv6 address. If there are **multiple public IPv6 addresses** available, Consul
-will exit with an error at startup.
-  Consul uses both TCP and UDP and the same port for both. If you
-  have any firewalls, be sure to allow both protocols. **In Consul 1.0 and later this can be set to a [go-sockaddr](https://godoc.org/github.com/hashicorp/go-sockaddr/template) template that needs to resolve to a single address.** Some example templates:
+  the local machine and will [advertise](/docs/agent/options.html#_advertise)
+  the private IPv4 address to the rest of the cluster. If there
+  are multiple private IPv4 addresses available, Consul will exit with an error
+  at startup. If you specify "[::]", Consul will [advertise](/docs/agent/options.html#_advertise) 
+  the public IPv6 address. 
+  If there are multiple public IPv6 addresses available, Consul will exit with an error at startup.
+  Consul uses both TCP and UDP and the same port for both. If you have any firewalls, 
+  be sure to allow both protocols. In Consul 1.0 and later this can be set to a 
+  [go-sockaddr](https://godoc.org/github.com/hashicorp/go-sockaddr/template) 
+  template that needs to resolve to a single address. Some example templates:
 
     ```sh
     # Using address within a specific CIDR
@@ -242,7 +243,7 @@ will exit with an error at startup.
 
 * <a name="_encrypt"></a><a href="#_encrypt">`-encrypt`</a> - Specifies the secret key to
   use for encryption of Consul
-  network traffic. This key must be 16-bytes that are Base64-encoded. The
+  network traffic. This key must be 32-bytes that are Base64-encoded. The
   easiest way to create an encryption key is to use
   [`consul keygen`](/docs/commands/keygen.html). All
   nodes within a cluster must share the same encryption key to communicate.
@@ -760,6 +761,9 @@ default will automatically work with some tooling.
 
 *   <a name="autopilot"></a><a href="#autopilot">`autopilot`</a> Added in Consul 0.8, this object
     allows a number of sub-keys to be set which can configure operator-friendly settings for Consul servers.
+    When these keys are provided as configuration, they will only be respected on bootstrapping. If they are not
+    provided, the defaults will be used. In order to change the value of these options after bootstrapping, you will
+    need to use the [Consul Operator Autopilot](https://www.consul.io/docs/commands/operator/autopilot.html) command.
     For more information about Autopilot, see the [Autopilot Guide](https://learn.hashicorp.com/consul/day-2-operations/autopilot).
 
     The following sub-keys are available:
@@ -790,6 +794,10 @@ default will automatically work with some tooling.
       If set to `true`, this setting will disable Autopilot's upgrade migration strategy in Consul Enterprise of waiting
       until enough newer-versioned servers have been added to the cluster before promoting any of them to voters. Defaults
       to `false`.
+
+    * <a name="upgrade_version_tag"></a><a href="#upgrade_version_tag">`upgrade_version_tag`</a> - (Enterprise-only)
+      The node_meta tag to use for version info when performing upgrade migrations. If this is not set, the Consul
+      version will be used.
 
 * <a name="auto_encrypt"></a><a href="#auto_encrypt">`auto_encrypt`</a>
     This object allows setting options for the `auto_encrypt` feature.
@@ -940,34 +948,6 @@ default will automatically work with some tooling.
           multiple cores available since it is simpler to reason about limiting
           CSR resources this way without artificially slowing down rotations.
           Added in 1.4.1.
-
-        * <a name="connect_proxy"></a><a href="#connect_proxy">`proxy`</a>
-          [**Deprecated**](/docs/connect/proxies/managed-deprecated.html) This
-          object allows setting options for the Connect proxies. The following
-          sub-keys are available:
-          * <a name="connect_proxy_allow_managed_registration"></a><a
-            href="#connect_proxy_allow_managed_registration">`allow_managed_api_registration`</a>
-            [**Deprecated**](/docs/connect/proxies/managed-deprecated.html)
-            Allows managed proxies to be configured with services that are
-            registered via the Agent HTTP API. Enabling this would allow anyone
-            with permission to register a service to define a command to execute
-            for the proxy. By default, this is false to protect against
-            arbitrary process execution.
-          * <a name="connect_proxy_allow_managed_root"></a><a
-            href="#connect_proxy_allow_managed_root">`allow_managed_root`</a>
-            [**Deprecated**](/docs/connect/proxies/managed-deprecated.html)
-            Allows Consul to start managed proxies if Consul is running as root
-            (EUID of the process is zero). We recommend running Consul as a
-            non-root user. By default, this is false to protect inadvertently
-            running external processes as root.
-        * <a name="connect_proxy_defaults"></a><a
-          href="#connect_proxy_defaults">`proxy_defaults`</a>
-          [**Deprecated**](/docs/connect/proxies/managed-deprecated.html) This
-          object configures the default proxy settings for service definitions
-          with [managed proxies](/docs/connect/proxies/managed-deprecated.html)
-          (now deprecated). It accepts the fields `exec_mode`, `daemon_command`,
-          and `config`. These are used as default values for the respective
-          fields in the service definition.
 
 * <a name="datacenter"></a><a href="#datacenter">`datacenter`</a> Equivalent to the
   [`-datacenter` command-line flag](#_datacenter).
@@ -1391,8 +1371,6 @@ default will automatically work with some tooling.
       to disable. **Note**: this will disable WAN federation which is not recommended. Various catalog and WAN related
       endpoints will return errors or empty results. TCP and UDP.
     * <a name="server_rpc_port"></a><a href="#server_rpc_port">`server`</a> - Server RPC address. Default 8300. TCP only.
-    * <a name="proxy_min_port"></a><a href="#proxy_min_port">`proxy_min_port`</a> [**Deprecated**](/docs/connect/proxies/managed-deprecated.html) - Minimum port number to use for automatically assigned [managed proxies](/docs/connect/proxies/managed-deprecated.html). Default 20000.
-    * <a name="proxy_max_port"></a><a href="#proxy_max_port">`proxy_max_port`</a> [**Deprecated**](/docs/connect/proxies/managed-deprecated.html) - Maximum port number to use for automatically assigned [managed proxies](/docs/connect/proxies/managed-deprecated.html). Default 20255.
     * <a name="sidecar_min_port"></a><a
       href="#sidecar_min_port">`sidecar_min_port`</a> - Inclusive minimum port
       number to use for automatically assigned [sidecar service

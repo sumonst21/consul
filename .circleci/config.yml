@@ -3,7 +3,7 @@ version: 2
 
 references:
   images:
-    go: &GOLANG_IMAGE circleci/golang:1.12.1
+    go: &GOLANG_IMAGE circleci/golang:1.12.8
     middleman: &MIDDLEMAN_IMAGE hashicorp/middleman-hashicorp:0.3.35
     ember: &EMBER_IMAGE circleci/node:8-browsers
 
@@ -20,7 +20,8 @@ references:
     EMAIL: noreply@hashicorp.com
     GIT_AUTHOR_NAME: circleci-consul
     GIT_COMMITTER_NAME: circleci-consul
-    S3_ARTIFACT_BUCKET:  consul-dev-artifacts
+    S3_ARTIFACT_BUCKET: consul-dev-artifacts
+    BASH_ENV: .circleci/bash_env.sh
 
 jobs:
   # lint consul tests
@@ -39,13 +40,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-          - consul-modcache-v1-{{ checksum "go.mod" }}
+            - consul-modcache-v1-{{ checksum "go.mod" }}
       - run:
           command: go mod download
       - save_cache:
           key: consul-modcache-v1-{{ checksum "go.mod" }}
           paths:
-          - /go/pkg/mod
+            - /go/pkg/mod
       - run:
           name: check go fmt
           command: |
@@ -70,13 +71,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-          - consul-modcache-v1-{{ checksum "go.mod" }}
+            - consul-modcache-v1-{{ checksum "go.mod" }}
       - run:
           command: make update-vendor
       - save_cache:
           key: consul-modcache-v1-{{ checksum "go.mod" }}
           paths:
-          - /go/pkg/mod
+            - /go/pkg/mod
       - run: |
           if ! git diff --exit-code; then
             echo "Git directory has vendor changes"
@@ -89,19 +90,19 @@ jobs:
     parallelism: 8
     environment:
       <<: *ENVIRONMENT
-      GOTAGS: '' # No tags for OSS but there are for enterprise
+      GOTAGS: "" # No tags for OSS but there are for enterprise
     steps:
       - checkout
       - restore_cache: # restore cache from dev-build job
           keys:
-          - consul-modcache-v1-{{ checksum "go.mod" }}
+            - consul-modcache-v1-{{ checksum "go.mod" }}
       - attach_workspace:
           at: /go/bin
       - run: mkdir -p $TEST_RESULTS_DIR
       - run: sudo apt-get update && sudo apt-get install -y rsyslog
       - run: sudo service rsyslog start
       - run: |
-          PACKAGE_NAMES=$(go list ./... | grep -v github.com/hashicorp/consul/agent/proxyprocess | circleci tests split --split-by=timings --timings-type=classname)
+          PACKAGE_NAMES=$(go list ./... | circleci tests split --split-by=timings --timings-type=classname)
           gotestsum --format=short-verbose --junitfile $TEST_RESULTS_DIR/gotestsum-report.xml -- -tags=$GOTAGS -p 3 $PACKAGE_NAMES
 
       - store_test_results:
@@ -115,12 +116,12 @@ jobs:
       - image: *GOLANG_IMAGE
     environment:
       <<: *ENVIRONMENT
-      GOTAGS: '' # No tags for OSS but there are for enterprise
+      GOTAGS: "" # No tags for OSS but there are for enterprise
     steps:
       - checkout
       - restore_cache: # restore cache from dev-build job
           keys:
-          - consul-modcache-v1-{{ checksum "go.mod" }}
+            - consul-modcache-v1-{{ checksum "go.mod" }}
       - attach_workspace:
           at: /go/bin
       - run: mkdir -p $TEST_RESULTS_DIR
@@ -140,6 +141,7 @@ jobs:
     docker:
       - image: *GOLANG_IMAGE
     environment: &build-env
+      <<: *ENVIRONMENT
       GOXPARALLEL: 2 # CircleCI containers are 2 CPU x 4GB RAM
     resource_class: large
     steps:
@@ -168,28 +170,53 @@ jobs:
       XC_ARCH: "amd64"
 
   # build all arm/arm64 architecture supported OS binaries
-  build-arm-arm64:
-    <<: *build-distros
+  build-arm:
+    docker:
+      - image: *GOLANG_IMAGE
     environment:
-      <<: *build-env
-      XC_OS: linux
-      XC_ARCH: "arm arm64"
+      <<: *ENVIRONMENT
+      CGO_ENABLED: 1
+      GOOS: linux
+    steps:
+      - checkout
+      - run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabi gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu
+      - run:
+          environment:
+            GOARM: 5
+            CC: arm-linux-gnueabi-gcc
+            GOARCH: arm
+          command: go build -o ./pkg/bin/linux_armel/consul  -ldflags="${GOLDFLAGS}"
+      - run:
+          environment:
+            GOARM: 6
+            CC: arm-linux-gnueabihf-gcc
+            GOARCH: arm
+          command: go build -o ./pkg/bin/linux_armhf/consul  -ldflags="${GOLDFLAGS}"
+      - run:
+          environment:
+            CC: aarch64-linux-gnu-gcc
+            GOARCH: arm64
+          command: go build -o ./pkg/bin/linux_aarch64/consul  -ldflags="${GOLDFLAGS}"
+      - store_artifacts:
+          path: ./pkg/bin
 
   # create a development build
   dev-build:
     docker:
       - image: *GOLANG_IMAGE
+    environment:
+      <<: *ENVIRONMENT
     steps:
       - checkout
       - restore_cache:
           keys:
-          - consul-modcache-v1-{{ checksum "go.mod" }}
+            - consul-modcache-v1-{{ checksum "go.mod" }}
       - run:
           command: make dev
       - save_cache:
           key: consul-modcache-v1-{{ checksum "go.mod" }}
           paths:
-          - /go/pkg/mod
+            - /go/pkg/mod
 
       # save dev build to pass to downstream jobs
       - persist_to_workspace:
@@ -322,6 +349,10 @@ jobs:
           name: middleman build
           command: bundle exec middleman build
 
+      - run:
+          name: add missing tar binary
+          command: apk update && apk add tar
+
       # saves website build directory
       - persist_to_workspace:
           root: .
@@ -337,6 +368,10 @@ jobs:
     steps:
       - checkout:
           path: ~/project
+          
+      - run:
+          name: add missing tar binary
+          command: apk update && apk add tar
 
       # attach website build directory
       - attach_workspace:
@@ -440,8 +475,7 @@ jobs:
       - image: *GOLANG_IMAGE
     environment:
       ENVOY_VERSIONS: "1.8.0"
-    steps:
-      &ENVOY_INTEGRATION_TEST_STEPS
+    steps: &ENVOY_INTEGRATION_TEST_STEPS
       - checkout
       # Get go binary from workspace
       - attach_workspace:
@@ -474,6 +508,13 @@ jobs:
       ENVOY_VERSIONS: "1.10.0"
     steps: *ENVOY_INTEGRATION_TEST_STEPS
 
+  envoy-integration-test-1.11.1:
+    docker:
+      - image: *GOLANG_IMAGE
+    environment:
+      ENVOY_VERSIONS: "1.11.1"
+    steps: *ENVOY_INTEGRATION_TEST_STEPS
+
   # This job merges master into the 'current' branch (${CIRCLE_BRANCH}) specified
   # in the branch filtering of the workflow
   merge-master:
@@ -482,7 +523,7 @@ jobs:
     steps:
       - add_ssh_keys:
           fingerprints:
-          - c6:96:98:82:dc:04:6c:39:dd:ac:83:05:e3:15:1c:98
+            - c6:96:98:82:dc:04:6c:39:dd:ac:83:05:e3:15:1c:98
       - checkout
       - run:
           name: Merge Consul OSS master branch into current branch
@@ -497,7 +538,7 @@ jobs:
             git fetch origin
 
             # Create a merge branch to run tests on
-            git_merge_branch="ci/master-merge-$(date +%Y%m%d%H%M%S)"
+            git_merge_branch="ci/master-merge-${CIRCLE_BRANCH}-$(date +%Y%m%d%H%M%S)"
             git checkout -b "${git_merge_branch}"
             latest_oss_commit="$(git rev-parse origin/master)"
 
@@ -554,13 +595,14 @@ jobs:
                 \"attachments\": [ \
                   { \
                     \"fallback\": \"Nightly Master Merge Failed!\", \
-                    \"text\": \"Nightly *master* merge into *release/1-6* failed!\n\nBuild Log: ${CIRCLE_BUILD_URL}\n\nAttempted merge from: https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/tree/${git_merge_branch}\n\nThere may be a merge conflict to resolve.\", \
+                    \"text\": \"Nightly *master* merge into *${CIRCLE_BRANCH}* failed!\n\nBuild Log: ${CIRCLE_BUILD_URL}\n\n*master* merge CI pipeline jobs failed:\n${unsuccessful_builds}\", \
                     \"footer\": \"${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}\", \
                     \"ts\": \"$(date +%s)\", \
                     \"color\": \"danger\" \
                   } \
                 ] \
               }" ${CONSUL_SLACK_WEBHOOK_URL}
+              git push --delete origin "${git_merge_branch}"
               exit 1
             fi
 
@@ -590,7 +632,7 @@ jobs:
                 \"attachments\": [ \
                   { \
                     \"fallback\": \"Nightly master merge success!\", \
-                    \"text\": \"Nightly *master* merge into *release/1-6* succeeded!\", \
+                    \"text\": \"Nightly *master* merge into *${CIRCLE_BRANCH}* succeeded!\", \
                     \"footer\": \"${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}\", \
                     \"ts\": \"$(date +%s)\", \
                     \"color\": \"good\" \
@@ -609,7 +651,7 @@ workflows:
           filters:
             branches:
               only:
-                - release/1-6
+                - /^release\/.*$/
   go-tests:
     jobs:
       - check-vendor
@@ -628,7 +670,7 @@ workflows:
     jobs:
       - build-386
       - build-amd64
-      - build-arm-arm64
+      - build-arm
   test-integrations:
     jobs:
       - dev-build
@@ -655,6 +697,9 @@ workflows:
           requires:
             - dev-build
       - envoy-integration-test-1.10.0:
+          requires:
+            - dev-build
+      - envoy-integration-test-1.11.1:
           requires:
             - dev-build
   website:

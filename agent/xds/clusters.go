@@ -16,6 +16,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
 
+	"github.com/hashicorp/consul/agent/connect"
 	"github.com/hashicorp/consul/agent/proxycfg"
 	"github.com/hashicorp/consul/agent/structs"
 )
@@ -52,20 +53,16 @@ func (s *Server) clustersFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnapsh
 
 	for _, u := range cfgSnap.Proxy.Upstreams {
 		id := u.Identifier()
-		var chain *structs.CompiledDiscoveryChain
-		if u.DestinationType != structs.UpstreamDestTypePreparedQuery {
-			chain = cfgSnap.ConnectProxy.DiscoveryChain[id]
-		}
 
-		if chain == nil {
-			// Either old-school upstream or prepared query.
-			upstreamCluster, err := s.makeUpstreamCluster(u, cfgSnap)
+		if u.DestinationType == structs.UpstreamDestTypePreparedQuery {
+			upstreamCluster, err := s.makeUpstreamClusterForPreparedQuery(u, cfgSnap)
 			if err != nil {
 				return nil, err
 			}
 			clusters = append(clusters, upstreamCluster)
 
 		} else {
+			chain := cfgSnap.ConnectProxy.DiscoveryChain[id]
 			upstreamClusters, err := s.makeUpstreamClustersForDiscoveryChain(u, chain, cfgSnap)
 			if err != nil {
 				return nil, err
@@ -89,7 +86,7 @@ func (s *Server) clustersFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsho
 
 	// generate the remote dc clusters
 	for dc, _ := range cfgSnap.MeshGateway.GatewayGroups {
-		clusterName := DatacenterSNI(dc, cfgSnap)
+		clusterName := connect.DatacenterSNI(dc, cfgSnap.Roots.TrustDomain)
 
 		cluster, err := s.makeMeshGatewayCluster(clusterName, cfgSnap)
 		if err != nil {
@@ -100,7 +97,7 @@ func (s *Server) clustersFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsho
 
 	// generate the per-service clusters
 	for svc, _ := range cfgSnap.MeshGateway.ServiceGroups {
-		clusterName := ServiceSNI(svc, "", "default", cfgSnap.Datacenter, cfgSnap)
+		clusterName := connect.ServiceSNI(svc, "", "default", cfgSnap.Datacenter, cfgSnap.Roots.TrustDomain)
 
 		cluster, err := s.makeMeshGatewayCluster(clusterName, cfgSnap)
 		if err != nil {
@@ -112,7 +109,7 @@ func (s *Server) clustersFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsho
 	// generate the service subset clusters
 	for svc, resolver := range cfgSnap.MeshGateway.ServiceResolvers {
 		for subsetName, _ := range resolver.Subsets {
-			clusterName := ServiceSNI(svc, subsetName, "default", cfgSnap.Datacenter, cfgSnap)
+			clusterName := connect.ServiceSNI(svc, subsetName, "default", cfgSnap.Datacenter, cfgSnap.Roots.TrustDomain)
 
 			cluster, err := s.makeMeshGatewayCluster(clusterName, cfgSnap)
 			if err != nil {
@@ -169,23 +166,16 @@ func (s *Server) makeAppCluster(cfgSnap *proxycfg.ConfigSnapshot) (*envoy.Cluste
 	return c, err
 }
 
-func (s *Server) makeUpstreamCluster(upstream structs.Upstream, cfgSnap *proxycfg.ConfigSnapshot) (*envoy.Cluster, error) {
+func (s *Server) makeUpstreamClusterForPreparedQuery(upstream structs.Upstream, cfgSnap *proxycfg.ConfigSnapshot) (*envoy.Cluster, error) {
 	var c *envoy.Cluster
 	var err error
 
-	ns := "default"
-	if upstream.DestinationNamespace != "" {
-		ns = upstream.DestinationNamespace
+	dc := upstream.Datacenter
+	if dc == "" {
+		dc = cfgSnap.Datacenter
 	}
-	dc := cfgSnap.Datacenter
-	if upstream.Datacenter != "" {
-		dc = upstream.Datacenter
-	}
+	sni := connect.UpstreamSNI(&upstream, "", dc, cfgSnap.Roots.TrustDomain)
 
-	sni := ServiceSNI(upstream.DestinationName, "", ns, dc, cfgSnap)
-	if upstream.DestinationType == "prepared_query" {
-		sni = QuerySNI(upstream.DestinationName, dc, cfgSnap)
-	}
 	cfg, err := ParseUpstreamConfig(upstream.Config)
 	if err != nil {
 		// Don't hard fail on a config typo, just warn. The parse func returns
@@ -235,6 +225,9 @@ func (s *Server) makeUpstreamClustersForDiscoveryChain(
 	chain *structs.CompiledDiscoveryChain,
 	cfgSnap *proxycfg.ConfigSnapshot,
 ) ([]*envoy.Cluster, error) {
+	if chain == nil {
+		return nil, fmt.Errorf("cannot create upstream cluster without discovery chain")
+	}
 
 	cfg, err := ParseUpstreamConfigNoDefaults(upstream.Config)
 	if err != nil {
@@ -244,29 +237,70 @@ func (s *Server) makeUpstreamClustersForDiscoveryChain(
 			upstream.Identifier(), err)
 	}
 
-	if chain == nil {
-		panic("chain must be provided")
+	var escapeHatchCluster *envoy.Cluster
+	if cfg.ClusterJSON != "" {
+		if chain.IsDefault() {
+			// If you haven't done anything to setup the discovery chain, then
+			// you can use the envoy_cluster_json escape hatch.
+			escapeHatchCluster, err = makeClusterFromUserConfig(cfg.ClusterJSON)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			s.Logger.Printf("[WARN] envoy: ignoring escape hatch setting Upstream[%s].Config[%s] because a discovery chain for %q is configured",
+				upstream.Identifier(), "envoy_cluster_json", chain.ServiceName)
+		}
 	}
 
-	// TODO(rb): make escape hatches work with chains
+	id := upstream.Identifier()
+	chainEndpointMap, ok := cfgSnap.ConnectProxy.WatchedUpstreamEndpoints[id]
+	if !ok {
+		// this should not happen
+		return nil, fmt.Errorf("no endpoint map for upstream %q", id)
+	}
 
 	var out []*envoy.Cluster
-	for target, node := range chain.GroupResolverNodes {
-		groupResolver := node.GroupResolver
 
-		sni := TargetSNI(target, cfgSnap)
-		s.Logger.Printf("[DEBUG] xds.clusters - generating cluster for %s", sni)
+	for _, node := range chain.Nodes {
+		if node.Type != structs.DiscoveryGraphNodeTypeResolver {
+			continue
+		}
+		failover := node.Resolver.Failover
+		targetID := node.Resolver.Target
+
+		target := chain.Targets[targetID]
+
+		// Determine if we have to generate the entire cluster differently.
+		failoverThroughMeshGateway := chain.WillFailoverThroughMeshGateway(node)
+
+		sni := target.SNI
+		clusterName := CustomizeClusterName(target.Name, chain)
+
+		if failoverThroughMeshGateway {
+			actualTargetID := firstHealthyTarget(
+				chain.Targets,
+				chainEndpointMap,
+				targetID,
+				failover.Targets,
+			)
+
+			if actualTargetID != targetID {
+				actualTarget := chain.Targets[actualTargetID]
+				sni = actualTarget.SNI
+			}
+		}
+
+		s.Logger.Printf("[DEBUG] xds.clusters - generating cluster for %s", clusterName)
 		c := &envoy.Cluster{
-			Name:                 sni,
-			AltStatName:          sni, // TODO(rb): change this?
-			ConnectTimeout:       groupResolver.ConnectTimeout,
+			Name:                 clusterName,
+			AltStatName:          clusterName,
+			ConnectTimeout:       node.Resolver.ConnectTimeout,
 			ClusterDiscoveryType: &envoy.Cluster_Type{Type: envoy.Cluster_EDS},
 			CommonLbConfig: &envoy.Cluster_CommonLbConfig{
 				HealthyPanicThreshold: &envoytype.Percent{
 					Value: 0, // disable panic threshold
 				},
 			},
-			// TODO(rb): adjust load assignment
 			EdsClusterConfig: &envoy.Cluster_EdsClusterConfig{
 				EdsConfig: &envoycore.ConfigSource{
 					ConfigSourceSpecifier: &envoycore.ConfigSource_Ads{
@@ -298,6 +332,18 @@ func (s *Server) makeUpstreamClustersForDiscoveryChain(
 		}
 
 		out = append(out, c)
+	}
+
+	if escapeHatchCluster != nil {
+		if len(out) != 1 {
+			return nil, fmt.Errorf("cannot inject escape hatch cluster when discovery chain had no nodes")
+		}
+		defaultCluster := out[0]
+
+		// Overlay what the user provided.
+		escapeHatchCluster.TlsContext = defaultCluster.TlsContext
+
+		out = []*envoy.Cluster{escapeHatchCluster}
 	}
 
 	return out, nil

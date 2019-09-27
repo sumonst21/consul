@@ -1,12 +1,8 @@
 package structs
 
 import (
-	"bytes"
-	"encoding"
+	"encoding/json"
 	"fmt"
-	"net/url"
-	"sort"
-	"strings"
 	"time"
 )
 
@@ -18,26 +14,49 @@ type CompiledDiscoveryChain struct {
 	Namespace   string // the namespace that the chain was compiled within
 	Datacenter  string // the datacenter that the chain was compiled within
 
-	Protocol string // overall protocol shared by everything in the chain
-
-	// Node is the top node in the chain.
+	// CustomizationHash is a unique hash of any data that affects the
+	// compilation of the discovery chain other than config entries or the
+	// name/namespace/datacenter evaluation criteria.
 	//
-	// If this is a router or splitter then in envoy this renders as an http
-	// route object.
-	//
-	// If this is a group resolver then in envoy this renders as a default
-	// wildcard http route object.
-	Node *DiscoveryGraphNode `json:",omitempty"`
+	// If set, this value should be used to prefix/suffix any generated load
+	// balancer data plane objects to avoid sharing customized and
+	// non-customized versions.
+	CustomizationHash string `json:",omitempty"`
 
-	// GroupResolverNodes respresents all unique service instance groups that
-	// need to be represented. For envoy these render as Clusters.
-	//
-	// Omitted from JSON because these already show up under the Node field.
-	GroupResolverNodes map[DiscoveryTarget]*DiscoveryGraphNode `json:"-"`
+	// Protocol is the overall protocol shared by everything in the chain.
+	Protocol string `json:",omitempty"`
 
-	// TODO(rb): not sure if these two fields are actually necessary but I'll know when I get into xDS
-	Resolvers map[string]*ServiceResolverConfigEntry `json:",omitempty"`
-	Targets   []DiscoveryTarget                      `json:",omitempty"`
+	// StartNode is the first key into the Nodes map that should be followed
+	// when walking the discovery chain.
+	StartNode string `json:",omitempty"`
+
+	// Nodes contains all nodes available for traversal in the chain keyed by a
+	// unique name.  You can walk this by starting with StartNode.
+	//
+	// NOTE: The names should be treated as opaque values and are only
+	// guaranteed to be consistent within a single compilation.
+	Nodes map[string]*DiscoveryGraphNode `json:",omitempty"`
+
+	// Targets is a list of all targets used in this chain.
+	Targets map[string]*DiscoveryTarget `json:",omitempty"`
+}
+
+func (c *CompiledDiscoveryChain) WillFailoverThroughMeshGateway(node *DiscoveryGraphNode) bool {
+	if node.Type != DiscoveryGraphNodeTypeResolver {
+		return false
+	}
+	failover := node.Resolver.Failover
+
+	if failover != nil && len(failover.Targets) > 0 {
+		for _, failTargetID := range failover.Targets {
+			failTarget := c.Targets[failTargetID]
+			switch failTarget.MeshGateway.Mode {
+			case MeshGatewayModeLocal, MeshGatewayModeRemote:
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // IsDefault returns true if the compiled chain represents no routing, no
@@ -46,40 +65,37 @@ type CompiledDiscoveryChain struct {
 // applied is redirection to another resolver that is default, so we double
 // check the resolver matches the requested resolver.
 func (c *CompiledDiscoveryChain) IsDefault() bool {
-	if c.Node == nil {
+	if c.StartNode == "" || len(c.Nodes) == 0 {
 		return true
 	}
-	return c.Node.Name == c.ServiceName &&
-		c.Node.Type == DiscoveryGraphNodeTypeGroupResolver &&
-		c.Node.GroupResolver.Default
-}
 
-// SubsetDefinitionForTarget is a convenience function to fetch the subset
-// definition for the service subset defined by the provided target. If the
-// subset is not defined an empty definition is returned.
-func (c *CompiledDiscoveryChain) SubsetDefinitionForTarget(t DiscoveryTarget) ServiceResolverSubset {
-	if t.ServiceSubset == "" {
-		return ServiceResolverSubset{}
+	node := c.Nodes[c.StartNode]
+	if node == nil {
+		panic("not possible: missing node named '" + c.StartNode + "' in chain '" + c.ServiceName + "'")
 	}
 
-	resolver, ok := c.Resolvers[t.Service]
-	if !ok {
-		return ServiceResolverSubset{}
+	if node.Type != DiscoveryGraphNodeTypeResolver {
+		return false
+	}
+	if !node.Resolver.Default {
+		return false
 	}
 
-	return resolver.Subsets[t.ServiceSubset]
+	target := c.Targets[node.Resolver.Target]
+
+	return target.Service == c.ServiceName
 }
 
 const (
-	DiscoveryGraphNodeTypeRouter        = "router"
-	DiscoveryGraphNodeTypeSplitter      = "splitter"
-	DiscoveryGraphNodeTypeGroupResolver = "group-resolver"
+	DiscoveryGraphNodeTypeRouter   = "router"
+	DiscoveryGraphNodeTypeSplitter = "splitter"
+	DiscoveryGraphNodeTypeResolver = "resolver"
 )
 
-// DiscoveryGraphNode is a single node of the compiled discovery chain.
+// DiscoveryGraphNode is a single node in the compiled discovery chain.
 type DiscoveryGraphNode struct {
 	Type string
-	Name string // default chain/service name at this spot
+	Name string // this is NOT necessarily a service
 
 	// fields for Type==router
 	Routes []*DiscoveryRoute `json:",omitempty"`
@@ -87,187 +103,136 @@ type DiscoveryGraphNode struct {
 	// fields for Type==splitter
 	Splits []*DiscoverySplit `json:",omitempty"`
 
-	// fields for Type==group-resolver
-	GroupResolver *DiscoveryGroupResolver `json:",omitempty"`
+	// fields for Type==resolver
+	Resolver *DiscoveryResolver `json:",omitempty"`
 }
 
-// compiled form of ServiceResolverConfigEntry but customized per non-failover target
-type DiscoveryGroupResolver struct {
-	Definition     *ServiceResolverConfigEntry `json:",omitempty"`
-	Default        bool                        `json:",omitempty"`
-	ConnectTimeout time.Duration               `json:",omitempty"`
-	MeshGateway    MeshGatewayConfig           `json:",omitempty"`
-	Target         DiscoveryTarget             `json:",omitempty"`
-	Failover       *DiscoveryFailover          `json:",omitempty"`
+func (s *DiscoveryGraphNode) IsRouter() bool {
+	return s.Type == DiscoveryGraphNodeTypeRouter
+}
+
+func (s *DiscoveryGraphNode) IsSplitter() bool {
+	return s.Type == DiscoveryGraphNodeTypeSplitter
+}
+
+func (s *DiscoveryGraphNode) IsResolver() bool {
+	return s.Type == DiscoveryGraphNodeTypeResolver
+}
+
+func (s *DiscoveryGraphNode) MapKey() string {
+	return fmt.Sprintf("%s:%s", s.Type, s.Name)
+}
+
+// compiled form of ServiceResolverConfigEntry
+type DiscoveryResolver struct {
+	Default        bool               `json:",omitempty"`
+	ConnectTimeout time.Duration      `json:",omitempty"`
+	Target         string             `json:",omitempty"`
+	Failover       *DiscoveryFailover `json:",omitempty"`
+}
+
+func (r *DiscoveryResolver) MarshalJSON() ([]byte, error) {
+	type Alias DiscoveryResolver
+	exported := &struct {
+		ConnectTimeout string `json:",omitempty"`
+		*Alias
+	}{
+		ConnectTimeout: r.ConnectTimeout.String(),
+		Alias:          (*Alias)(r),
+	}
+	if r.ConnectTimeout == 0 {
+		exported.ConnectTimeout = ""
+	}
+
+	return json.Marshal(exported)
+}
+
+func (r *DiscoveryResolver) UnmarshalJSON(data []byte) error {
+	type Alias DiscoveryResolver
+	aux := &struct {
+		ConnectTimeout string
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	var err error
+	if aux.ConnectTimeout != "" {
+		if r.ConnectTimeout, err = time.ParseDuration(aux.ConnectTimeout); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // compiled form of ServiceRoute
 type DiscoveryRoute struct {
-	Definition      *ServiceRoute       `json:",omitempty"`
-	DestinationNode *DiscoveryGraphNode `json:",omitempty"`
+	Definition *ServiceRoute `json:",omitempty"`
+	NextNode   string        `json:",omitempty"`
 }
 
 // compiled form of ServiceSplit
 type DiscoverySplit struct {
-	Weight float32             `json:",omitempty"`
-	Node   *DiscoveryGraphNode `json:",omitempty"`
+	Weight   float32 `json:",omitempty"`
+	NextNode string  `json:",omitempty"`
 }
 
 // compiled form of ServiceResolverFailover
-// TODO(rb): figure out how to get mesh gateways in here
 type DiscoveryFailover struct {
-	Definition *ServiceResolverFailover `json:",omitempty"`
-	Targets    []DiscoveryTarget        `json:",omitempty"`
+	Targets []string `json:",omitempty"`
 }
 
 // DiscoveryTarget represents all of the inputs necessary to use a resolver
 // config entry to execute a catalog query to generate a list of service
 // instances during discovery.
-//
-// This is a value type so it can be used as a map key.
 type DiscoveryTarget struct {
+	// ID is a unique identifier for referring to this target in a compiled
+	// chain. It should be treated as a per-compile opaque string.
+	ID string `json:",omitempty"`
+
 	Service       string `json:",omitempty"`
 	ServiceSubset string `json:",omitempty"`
 	Namespace     string `json:",omitempty"`
 	Datacenter    string `json:",omitempty"`
+
+	MeshGateway MeshGatewayConfig     `json:",omitempty"`
+	Subset      ServiceResolverSubset `json:",omitempty"`
+
+	// External is true if this target is outside of this consul cluster.
+	External bool `json:",omitempty"`
+
+	// SNI is the sni field to use when connecting to this set of endpoints
+	// over TLS.
+	SNI string `json:",omitempty"`
+
+	// Name is the unique name for this target for use when generating load
+	// balancer objects.  This has a structure similar to SNI, but will not be
+	// affected by SNI customizations.
+	Name string `json:",omitempty"`
 }
 
-func (t DiscoveryTarget) IsEmpty() bool {
-	return t.Service == "" && t.ServiceSubset == "" && t.Namespace == "" && t.Datacenter == ""
+func NewDiscoveryTarget(service, serviceSubset, namespace, datacenter string) *DiscoveryTarget {
+	t := &DiscoveryTarget{
+		Service:       service,
+		ServiceSubset: serviceSubset,
+		Namespace:     namespace,
+		Datacenter:    datacenter,
+	}
+	t.setID()
+	return t
 }
 
-// CopyAndModify will duplicate the target and selectively modify it given the
-// requested inputs.
-func (t DiscoveryTarget) CopyAndModify(
-	service,
-	serviceSubset,
-	namespace,
-	datacenter string,
-) DiscoveryTarget {
-	t2 := t // copy
-	if service != "" && service != t2.Service {
-		t2.Service = service
-		// Reset the chosen subset if we reference a service other than our own.
-		t2.ServiceSubset = ""
-	}
-	if serviceSubset != "" && serviceSubset != t2.ServiceSubset {
-		t2.ServiceSubset = serviceSubset
-	}
-	if namespace != "" && namespace != t2.Namespace {
-		t2.Namespace = namespace
-	}
-	if datacenter != "" && datacenter != t2.Datacenter {
-		t2.Datacenter = datacenter
-	}
-	return t2
-}
-
-var _ encoding.TextMarshaler = DiscoveryTarget{}
-var _ encoding.TextUnmarshaler = (*DiscoveryTarget)(nil)
-
-// MarshalText implements encoding.TextMarshaler.
-//
-// This should also not include any colons for embedding that happens
-// elsewhere.
-//
-// This should NOT return any errors.
-func (t DiscoveryTarget) MarshalText() (text []byte, err error) {
-	var buf bytes.Buffer
-	buf.WriteString(url.QueryEscape(t.Service))
-	buf.WriteRune(',')
-	buf.WriteString(url.QueryEscape(t.ServiceSubset))
-	buf.WriteRune(',')
-	if t.Namespace != "default" {
-		buf.WriteString(url.QueryEscape(t.Namespace))
-	}
-	buf.WriteRune(',')
-	buf.WriteString(url.QueryEscape(t.Datacenter))
-	return buf.Bytes(), nil
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (t *DiscoveryTarget) UnmarshalText(text []byte) error {
-	parts := bytes.Split(text, []byte(","))
-	bad := false
-	if len(parts) != 4 {
-		return fmt.Errorf("invalid target: %q", string(text))
-	}
-
-	var err error
-	t.Service, err = url.QueryUnescape(string(parts[0]))
-	if err != nil {
-		bad = true
-	}
-	t.ServiceSubset, err = url.QueryUnescape(string(parts[1]))
-	if err != nil {
-		bad = true
-	}
-	t.Namespace, err = url.QueryUnescape(string(parts[2]))
-	if err != nil {
-		bad = true
-	}
-	t.Datacenter, err = url.QueryUnescape(string(parts[3]))
-	if err != nil {
-		bad = true
-	}
-
-	if bad {
-		return fmt.Errorf("invalid target: %q", string(text))
-	}
-
-	if t.Namespace == "" {
-		t.Namespace = "default"
-	}
-	return nil
-}
-
-func (t DiscoveryTarget) String() string {
-	var b strings.Builder
-
-	if t.ServiceSubset != "" {
-		b.WriteString(t.ServiceSubset)
+func (t *DiscoveryTarget) setID() {
+	// NOTE: this format is similar to the SNI syntax for simplicity
+	if t.ServiceSubset == "" {
+		t.ID = fmt.Sprintf("%s.%s.%s", t.Service, t.Namespace, t.Datacenter)
 	} else {
-		b.WriteString("<default>")
+		t.ID = fmt.Sprintf("%s.%s.%s.%s", t.ServiceSubset, t.Service, t.Namespace, t.Datacenter)
 	}
-	b.WriteRune('.')
-
-	b.WriteString(t.Service)
-	b.WriteRune('.')
-
-	if t.Namespace != "" {
-		b.WriteString(t.Namespace)
-	} else {
-		b.WriteString("<default>")
-	}
-	b.WriteRune('.')
-
-	b.WriteString(t.Datacenter)
-
-	return b.String()
 }
 
-type DiscoveryTargets []DiscoveryTarget
-
-func (targets DiscoveryTargets) Sort() {
-	sort.Slice(targets, func(i, j int) bool {
-		if targets[i].Service < targets[j].Service {
-			return true
-		} else if targets[i].Service > targets[j].Service {
-			return false
-		}
-
-		if targets[i].ServiceSubset < targets[j].ServiceSubset {
-			return true
-		} else if targets[i].ServiceSubset > targets[j].ServiceSubset {
-			return false
-		}
-
-		if targets[i].Namespace < targets[j].Namespace {
-			return true
-		} else if targets[i].Namespace > targets[j].Namespace {
-			return false
-		}
-
-		return targets[i].Datacenter < targets[j].Datacenter
-	})
+func (t *DiscoveryTarget) String() string {
+	return t.ID
 }

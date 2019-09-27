@@ -308,7 +308,6 @@ curl localhost:8500/v1/agent/health/service/name/web
             "Meta": null,
             "Port": 80,
             "EnableTagOverride": false,
-            "ProxyDestination": "",
             "Connect": {
                 "Native": false,
                 "Proxy": null
@@ -338,7 +337,6 @@ curl localhost:8500/v1/agent/health/service/name/web
             "Meta": null,
             "Port": 80,
             "EnableTagOverride": false,
-            "ProxyDestination": "",
             "Connect": {
                 "Native": false,
                 "Proxy": null
@@ -390,7 +388,6 @@ curl localhost:8500/v1/agent/health/service/id/web2
         "Meta": null,
         "Port": 80,
         "EnableTagOverride": false,
-        "ProxyDestination": "",
         "Connect": {
             "Native": false,
             "Proxy": null
@@ -438,7 +435,6 @@ curl localhost:8500/v1/agent/health/service/id/web1
         "Meta": null,
         "Port": 80,
         "EnableTagOverride": false,
-        "ProxyDestination": "",
         "Connect": {
             "Native": false,
             "Proxy": null
@@ -465,7 +461,7 @@ Parameters and response format are the same as
 
 ## Register Service
 
-This endpoint adds a new service, with an optional health check, to the local
+This endpoint adds a new service, with optional health checks, to the local
 agent.
 
 The agent is responsible for managing the status of its local services, and for
@@ -488,6 +484,10 @@ The table below shows this endpoint's support for
 | Blocking Queries | Consistency Modes | Agent Caching | ACL Required    |
 | ---------------- | ----------------- | ------------- | --------------- |
 | `NO`             | `none`            | `none`        | `service:write` |
+
+### Query string parameters
+
+- `replace-existing-checks` - Missing healthchecks from the request will be deleted from the agent. Using this parameter allows to idempotently register a service and its checks whithout having to manually deregister checks.
 
 ### Parameters
 
@@ -522,12 +522,6 @@ service definition keys for compatibility with the config file format.
   services that are [Connect-capable](/docs/connect/index.html)
   proxies representing another service or "mesh-gateway" for instances of
   a [mesh gateway](/docs/connect/mesh_gateway.html)
-
-- `ProxyDestination` `(string: "")` - **Deprecated** From 1.2.0 to 1.2.3 this
-  was used for "connect-proxy" `Kind` services however the equivalent field is
-  now in `Proxy.DestinationServiceName`. Registrations using this field will
-  continue to work until some later major version where this will be removed
-  entirely. It's strongly recommended to switch to using the new field.
 
 - `Proxy` `(Proxy: nil)` - From 1.2.3 on, specifies the configuration for a
   Connect proxy instance. This is only valid if `Kind == "connect-proxy"` or
@@ -633,7 +627,7 @@ For the `Connect` field, the parameters are:
 $ curl \
     --request PUT \
     --data @payload.json \
-    http://127.0.0.1:8500/v1/agent/service/register
+    http://127.0.0.1:8500/v1/agent/service/register?replace-existing-checks=1
 ```
 
 ## Deregister Service

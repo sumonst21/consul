@@ -157,6 +157,45 @@ func TestUpstreamNodes(t testing.T) structs.CheckServiceNodes {
 	}
 }
 
+func TestUpstreamNodesInStatus(t testing.T, status string) structs.CheckServiceNodes {
+	return structs.CheckServiceNodes{
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "test1",
+				Node:       "test1",
+				Address:    "10.10.1.1",
+				Datacenter: "dc1",
+			},
+			Service: structs.TestNodeService(t),
+			Checks: structs.HealthChecks{
+				&structs.HealthCheck{
+					Node:        "test1",
+					ServiceName: "web",
+					Name:        "force",
+					Status:      status,
+				},
+			},
+		},
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "test2",
+				Node:       "test2",
+				Address:    "10.10.1.2",
+				Datacenter: "dc1",
+			},
+			Service: structs.TestNodeService(t),
+			Checks: structs.HealthChecks{
+				&structs.HealthCheck{
+					Node:        "test2",
+					ServiceName: "web",
+					Name:        "force",
+					Status:      status,
+				},
+			},
+		},
+	}
+}
+
 func TestUpstreamNodesDC2(t testing.T) structs.CheckServiceNodes {
 	return structs.CheckServiceNodes{
 		structs.CheckServiceNode{
@@ -174,6 +213,68 @@ func TestUpstreamNodesDC2(t testing.T) structs.CheckServiceNodes {
 				Node:       "test2",
 				Address:    "10.20.1.2",
 				Datacenter: "dc2",
+			},
+			Service: structs.TestNodeService(t),
+		},
+	}
+}
+
+func TestUpstreamNodesInStatusDC2(t testing.T, status string) structs.CheckServiceNodes {
+	return structs.CheckServiceNodes{
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "test1",
+				Node:       "test1",
+				Address:    "10.20.1.1",
+				Datacenter: "dc2",
+			},
+			Service: structs.TestNodeService(t),
+			Checks: structs.HealthChecks{
+				&structs.HealthCheck{
+					Node:        "test1",
+					ServiceName: "web",
+					Name:        "force",
+					Status:      status,
+				},
+			},
+		},
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "test2",
+				Node:       "test2",
+				Address:    "10.20.1.2",
+				Datacenter: "dc2",
+			},
+			Service: structs.TestNodeService(t),
+			Checks: structs.HealthChecks{
+				&structs.HealthCheck{
+					Node:        "test2",
+					ServiceName: "web",
+					Name:        "force",
+					Status:      status,
+				},
+			},
+		},
+	}
+}
+
+func TestUpstreamNodesDC3(t testing.T) structs.CheckServiceNodes {
+	return structs.CheckServiceNodes{
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "test1",
+				Node:       "test1",
+				Address:    "10.30.1.1",
+				Datacenter: "dc3",
+			},
+			Service: structs.TestNodeService(t),
+		},
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "test2",
+				Node:       "test2",
+				Address:    "10.30.1.2",
+				Datacenter: "dc3",
 			},
 			Service: structs.TestNodeService(t),
 		},
@@ -203,6 +304,35 @@ func TestUpstreamNodesAlternate(t testing.T) structs.CheckServiceNodes {
 	}
 }
 
+func TestGatewayNodesDC1(t testing.T) structs.CheckServiceNodes {
+	return structs.CheckServiceNodes{
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "mesh-gateway-1",
+				Node:       "mesh-gateway",
+				Address:    "10.10.1.1",
+				Datacenter: "dc1",
+			},
+			Service: structs.TestNodeServiceMeshGatewayWithAddrs(t,
+				"10.10.1.1", 8443,
+				structs.ServiceAddress{Address: "10.10.1.1", Port: 8443},
+				structs.ServiceAddress{Address: "198.118.1.1", Port: 443}),
+		},
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "mesh-gateway-2",
+				Node:       "mesh-gateway",
+				Address:    "10.10.1.2",
+				Datacenter: "dc1",
+			},
+			Service: structs.TestNodeServiceMeshGatewayWithAddrs(t,
+				"10.10.1.2", 8443,
+				structs.ServiceAddress{Address: "10.0.1.2", Port: 8443},
+				structs.ServiceAddress{Address: "198.118.1.2", Port: 443}),
+		},
+	}
+}
+
 func TestGatewayNodesDC2(t testing.T) structs.CheckServiceNodes {
 	return structs.CheckServiceNodes{
 		structs.CheckServiceNode{
@@ -228,6 +358,35 @@ func TestGatewayNodesDC2(t testing.T) structs.CheckServiceNodes {
 				"10.0.1.2", 8443,
 				structs.ServiceAddress{Address: "10.0.1.2", Port: 8443},
 				structs.ServiceAddress{Address: "198.18.1.2", Port: 443}),
+		},
+	}
+}
+
+func TestGatewayNodesDC3(t testing.T) structs.CheckServiceNodes {
+	return structs.CheckServiceNodes{
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "mesh-gateway-1",
+				Node:       "mesh-gateway",
+				Address:    "10.30.1.1",
+				Datacenter: "dc3",
+			},
+			Service: structs.TestNodeServiceMeshGatewayWithAddrs(t,
+				"10.30.1.1", 8443,
+				structs.ServiceAddress{Address: "10.0.1.1", Port: 8443},
+				structs.ServiceAddress{Address: "198.38.1.1", Port: 443}),
+		},
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "mesh-gateway-2",
+				Node:       "mesh-gateway",
+				Address:    "10.30.1.2",
+				Datacenter: "dc3",
+			},
+			Service: structs.TestNodeServiceMeshGatewayWithAddrs(t,
+				"10.30.1.2", 8443,
+				structs.ServiceAddress{Address: "10.30.1.2", Port: 8443},
+				structs.ServiceAddress{Address: "198.38.1.2", Port: 443}),
 		},
 	}
 }
@@ -400,6 +559,12 @@ func TestGatewayServiceGroupFooDC1(t testing.T) structs.CheckServiceNodes {
 // TestConfigSnapshot returns a fully populated snapshot
 func TestConfigSnapshot(t testing.T) *ConfigSnapshot {
 	roots, leaf := TestCerts(t)
+
+	// no entries implies we'll get a default chain
+	dbChain := discoverychain.TestCompileConfigEntries(
+		t, "db", "default", "dc1",
+		connect.TestClusterID+".consul", "dc1", nil)
+
 	return &ConfigSnapshot{
 		Kind:    structs.ServiceKindConnectProxy,
 		Service: "web-sidecar-proxy",
@@ -419,8 +584,16 @@ func TestConfigSnapshot(t testing.T) *ConfigSnapshot {
 		Roots: roots,
 		ConnectProxy: configSnapshotConnectProxy{
 			Leaf: leaf,
+			DiscoveryChain: map[string]*structs.CompiledDiscoveryChain{
+				"db": dbChain,
+			},
 			UpstreamEndpoints: map[string]structs.CheckServiceNodes{
-				"db": TestUpstreamNodes(t),
+				"prepared_query:geo-cache": TestUpstreamNodes(t),
+			},
+			WatchedUpstreamEndpoints: map[string]map[string]structs.CheckServiceNodes{
+				"db": map[string]structs.CheckServiceNodes{
+					"db.default.dc1": TestUpstreamNodes(t),
+				},
 			},
 		},
 		Datacenter: "dc1",
@@ -432,8 +605,48 @@ func TestConfigSnapshotDiscoveryChain(t testing.T) *ConfigSnapshot {
 	return testConfigSnapshotDiscoveryChain(t, "simple")
 }
 
+func TestConfigSnapshotDiscoveryChainExternalSNI(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "external-sni")
+}
+
+func TestConfigSnapshotDiscoveryChainWithOverrides(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "simple-with-overrides")
+}
+
 func TestConfigSnapshotDiscoveryChainWithFailover(t testing.T) *ConfigSnapshot {
 	return testConfigSnapshotDiscoveryChain(t, "failover")
+}
+
+func TestConfigSnapshotDiscoveryChainWithFailoverThroughRemoteGateway(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-remote-gateway")
+}
+
+func TestConfigSnapshotDiscoveryChainWithFailoverThroughRemoteGatewayTriggered(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-remote-gateway-triggered")
+}
+
+func TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughRemoteGateway(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-double-remote-gateway")
+}
+
+func TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughRemoteGatewayTriggered(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-double-remote-gateway-triggered")
+}
+
+func TestConfigSnapshotDiscoveryChainWithFailoverThroughLocalGateway(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-local-gateway")
+}
+
+func TestConfigSnapshotDiscoveryChainWithFailoverThroughLocalGatewayTriggered(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-local-gateway-triggered")
+}
+
+func TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughLocalGateway(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-double-local-gateway")
+}
+
+func TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughLocalGatewayTriggered(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover-through-double-local-gateway-triggered")
 }
 
 func TestConfigSnapshotDiscoveryChain_SplitterWithResolverRedirectMultiDC(t testing.T) *ConfigSnapshot {
@@ -444,14 +657,43 @@ func TestConfigSnapshotDiscoveryChainWithEntries(t testing.T, additionalEntries 
 	return testConfigSnapshotDiscoveryChain(t, "simple", additionalEntries...)
 }
 
+func TestConfigSnapshotDiscoveryChainDefault(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "default")
+}
+
 func testConfigSnapshotDiscoveryChain(t testing.T, variation string, additionalEntries ...structs.ConfigEntry) *ConfigSnapshot {
 	roots, leaf := TestCerts(t)
 
 	// Compile a chain.
-	var entries []structs.ConfigEntry
+	var (
+		entries      []structs.ConfigEntry
+		compileSetup func(req *discoverychain.CompileRequest)
+	)
 	switch variation {
+	case "default":
+		// no config entries
+	case "simple-with-overrides":
+		compileSetup = func(req *discoverychain.CompileRequest) {
+			req.OverrideMeshGateway.Mode = structs.MeshGatewayModeLocal
+			req.OverrideProtocol = "grpc"
+			req.OverrideConnectTimeout = 66 * time.Second
+		}
+		fallthrough
 	case "simple":
 		entries = append(entries,
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+			},
+		)
+	case "external-sni":
+		entries = append(entries,
+			&structs.ServiceConfigEntry{
+				Kind:        structs.ServiceDefaults,
+				Name:        "db",
+				ExternalSNI: "db.some.other.service.mesh",
+			},
 			&structs.ServiceResolverConfigEntry{
 				Kind:           structs.ServiceResolver,
 				Name:           "db",
@@ -467,6 +709,94 @@ func testConfigSnapshotDiscoveryChain(t testing.T, variation string, additionalE
 				Failover: map[string]structs.ServiceResolverFailover{
 					"*": {
 						Service: "fail",
+					},
+				},
+			},
+		)
+	case "failover-through-remote-gateway-triggered":
+		fallthrough
+	case "failover-through-remote-gateway":
+		entries = append(entries,
+			&structs.ServiceConfigEntry{
+				Kind: structs.ServiceDefaults,
+				Name: "db",
+				MeshGateway: structs.MeshGatewayConfig{
+					Mode: structs.MeshGatewayModeRemote,
+				},
+			},
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+				Failover: map[string]structs.ServiceResolverFailover{
+					"*": {
+						Datacenters: []string{"dc2"},
+					},
+				},
+			},
+		)
+	case "failover-through-double-remote-gateway-triggered":
+		fallthrough
+	case "failover-through-double-remote-gateway":
+		entries = append(entries,
+			&structs.ServiceConfigEntry{
+				Kind: structs.ServiceDefaults,
+				Name: "db",
+				MeshGateway: structs.MeshGatewayConfig{
+					Mode: structs.MeshGatewayModeRemote,
+				},
+			},
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+				Failover: map[string]structs.ServiceResolverFailover{
+					"*": {
+						Datacenters: []string{"dc2", "dc3"},
+					},
+				},
+			},
+		)
+	case "failover-through-local-gateway-triggered":
+		fallthrough
+	case "failover-through-local-gateway":
+		entries = append(entries,
+			&structs.ServiceConfigEntry{
+				Kind: structs.ServiceDefaults,
+				Name: "db",
+				MeshGateway: structs.MeshGatewayConfig{
+					Mode: structs.MeshGatewayModeLocal,
+				},
+			},
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+				Failover: map[string]structs.ServiceResolverFailover{
+					"*": {
+						Datacenters: []string{"dc2"},
+					},
+				},
+			},
+		)
+	case "failover-through-double-local-gateway-triggered":
+		fallthrough
+	case "failover-through-double-local-gateway":
+		entries = append(entries,
+			&structs.ServiceConfigEntry{
+				Kind: structs.ServiceDefaults,
+				Name: "db",
+				MeshGateway: structs.MeshGatewayConfig{
+					Mode: structs.MeshGatewayModeLocal,
+				},
+			},
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+				Failover: map[string]structs.ServiceResolverFailover{
+					"*": {
+						Datacenters: []string{"dc2", "dc3"},
 					},
 				},
 			},
@@ -528,18 +858,7 @@ func testConfigSnapshotDiscoveryChain(t testing.T, variation string, additionalE
 		entries = append(entries, additionalEntries...)
 	}
 
-	dbChain := discoverychain.TestCompileConfigEntries(t, "db", "default", "dc1", entries...)
-
-	dbTarget := structs.DiscoveryTarget{
-		Service:    "db",
-		Namespace:  "default",
-		Datacenter: "dc1",
-	}
-	failTarget := structs.DiscoveryTarget{
-		Service:    "fail",
-		Namespace:  "default",
-		Datacenter: "dc1",
-	}
+	dbChain := discoverychain.TestCompileConfigEntries(t, "db", "default", "dc1", connect.TestClusterID+".consul", "dc1", compileSetup, entries...)
 
 	snap := &ConfigSnapshot{
 		Kind:    structs.ServiceKindConnectProxy,
@@ -563,9 +882,9 @@ func testConfigSnapshotDiscoveryChain(t testing.T, variation string, additionalE
 			DiscoveryChain: map[string]*structs.CompiledDiscoveryChain{
 				"db": dbChain,
 			},
-			WatchedUpstreamEndpoints: map[string]map[structs.DiscoveryTarget]structs.CheckServiceNodes{
-				"db": map[structs.DiscoveryTarget]structs.CheckServiceNodes{
-					dbTarget: TestUpstreamNodes(t),
+			WatchedUpstreamEndpoints: map[string]map[string]structs.CheckServiceNodes{
+				"db": map[string]structs.CheckServiceNodes{
+					"db.default.dc1": TestUpstreamNodes(t),
 				},
 			},
 		},
@@ -573,26 +892,68 @@ func testConfigSnapshotDiscoveryChain(t testing.T, variation string, additionalE
 	}
 
 	switch variation {
+	case "default":
+	case "simple-with-overrides":
 	case "simple":
+	case "external-sni":
 	case "failover":
-		snap.ConnectProxy.WatchedUpstreamEndpoints["db"][failTarget] =
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["fail.default.dc1"] =
 			TestUpstreamNodesAlternate(t)
+	case "failover-through-remote-gateway-triggered":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc1"] =
+			TestUpstreamNodesInStatus(t, "critical")
+		fallthrough
+	case "failover-through-remote-gateway":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc2"] =
+			TestUpstreamNodesDC2(t)
+		snap.ConnectProxy.WatchedGatewayEndpoints = map[string]map[string]structs.CheckServiceNodes{
+			"db": map[string]structs.CheckServiceNodes{
+				"dc2": TestGatewayNodesDC2(t),
+			},
+		}
+	case "failover-through-double-remote-gateway-triggered":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc1"] =
+			TestUpstreamNodesInStatus(t, "critical")
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc2"] =
+			TestUpstreamNodesInStatusDC2(t, "critical")
+		fallthrough
+	case "failover-through-double-remote-gateway":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc3"] = TestUpstreamNodesDC2(t)
+		snap.ConnectProxy.WatchedGatewayEndpoints = map[string]map[string]structs.CheckServiceNodes{
+			"db": map[string]structs.CheckServiceNodes{
+				"dc2": TestGatewayNodesDC2(t),
+				"dc3": TestGatewayNodesDC3(t),
+			},
+		}
+	case "failover-through-local-gateway-triggered":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc1"] =
+			TestUpstreamNodesInStatus(t, "critical")
+		fallthrough
+	case "failover-through-local-gateway":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc2"] =
+			TestUpstreamNodesDC2(t)
+		snap.ConnectProxy.WatchedGatewayEndpoints = map[string]map[string]structs.CheckServiceNodes{
+			"db": map[string]structs.CheckServiceNodes{
+				"dc1": TestGatewayNodesDC1(t),
+			},
+		}
+	case "failover-through-double-local-gateway-triggered":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc1"] =
+			TestUpstreamNodesInStatus(t, "critical")
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc2"] =
+			TestUpstreamNodesInStatusDC2(t, "critical")
+		fallthrough
+	case "failover-through-double-local-gateway":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"]["db.default.dc3"] = TestUpstreamNodesDC2(t)
+		snap.ConnectProxy.WatchedGatewayEndpoints = map[string]map[string]structs.CheckServiceNodes{
+			"db": map[string]structs.CheckServiceNodes{
+				"dc1": TestGatewayNodesDC1(t),
+			},
+		}
 	case "splitter-with-resolver-redirect-multidc":
-		dbTarget_v1_dc1 := structs.DiscoveryTarget{
-			Service:       "db",
-			ServiceSubset: "v1",
-			Namespace:     "default",
-			Datacenter:    "dc1",
-		}
-		dbTarget_v2_dc2 := structs.DiscoveryTarget{
-			Service:       "db",
-			ServiceSubset: "v2",
-			Namespace:     "default",
-			Datacenter:    "dc2",
-		}
-		snap.ConnectProxy.WatchedUpstreamEndpoints["db"] = map[structs.DiscoveryTarget]structs.CheckServiceNodes{
-			dbTarget_v1_dc1: TestUpstreamNodes(t),
-			dbTarget_v2_dc2: TestUpstreamNodesDC2(t),
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"] = map[string]structs.CheckServiceNodes{
+			"v1.db.default.dc1": TestUpstreamNodes(t),
+			"v2.db.default.dc2": TestUpstreamNodesDC2(t),
 		}
 	default:
 		t.Fatalf("unexpected variation: %q", variation)

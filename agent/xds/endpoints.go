@@ -9,6 +9,7 @@ import (
 	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	"github.com/gogo/protobuf/proto"
 
+	"github.com/hashicorp/consul/agent/connect"
 	"github.com/hashicorp/consul/agent/proxycfg"
 	"github.com/hashicorp/consul/agent/structs"
 	"github.com/hashicorp/consul/api"
@@ -35,10 +36,8 @@ func (s *Server) endpointsFromSnapshot(cfgSnap *proxycfg.ConfigSnapshot, token s
 // endpointsFromSnapshotConnectProxy returns the xDS API representation of the "endpoints"
 // (upstream instances) in the snapshot.
 func (s *Server) endpointsFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnapshot, token string) ([]proto.Message, error) {
-	// TODO(rb): this sizing is a low bound.
-	resources := make([]proto.Message, 0, len(cfgSnap.ConnectProxy.UpstreamEndpoints))
-
-	// TODO(rb): should naming from 1.5 -> 1.6 for clusters remain unchanged?
+	resources := make([]proto.Message, 0,
+		len(cfgSnap.ConnectProxy.UpstreamEndpoints)+len(cfgSnap.ConnectProxy.WatchedUpstreamEndpoints))
 
 	for _, u := range cfgSnap.Proxy.Upstreams {
 		id := u.Identifier()
@@ -51,12 +50,16 @@ func (s *Server) endpointsFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnaps
 		if chain == nil {
 			// We ONLY want this branch for prepared queries.
 
-			sni := ServiceSNI(u.DestinationName, "", u.DestinationNamespace, u.Datacenter, cfgSnap)
+			dc := u.Datacenter
+			if dc == "" {
+				dc = cfgSnap.Datacenter
+			}
+			clusterName := connect.UpstreamSNI(&u, "", dc, cfgSnap.Roots.TrustDomain)
+
 			endpoints, ok := cfgSnap.ConnectProxy.UpstreamEndpoints[id]
 			if ok {
 				la := makeLoadAssignment(
-					sni,
-					0,
+					clusterName,
 					[]loadAssignmentEndpointGroup{
 						{Endpoints: endpoints},
 					},
@@ -68,64 +71,73 @@ func (s *Server) endpointsFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnaps
 		} else {
 			// Newfangled discovery chain plumbing.
 
-			chainEndpointMap, ok := cfgSnap.ConnectProxy.WatchedUpstreamEndpoints[id]
-			if !ok {
-				continue // skip the upstream (should not happen)
-			}
+			// Find all resolver nodes.
+			for _, node := range chain.Nodes {
+				if node.Type != structs.DiscoveryGraphNodeTypeResolver {
+					continue
+				}
+				failover := node.Resolver.Failover
+				targetID := node.Resolver.Target
 
-			for target, node := range chain.GroupResolverNodes {
-				groupResolver := node.GroupResolver
-				failover := groupResolver.Failover
+				target := chain.Targets[targetID]
 
-				endpoints, ok := chainEndpointMap[target]
-				if !ok {
-					continue // skip the cluster (should not happen)
+				clusterName := CustomizeClusterName(target.Name, chain)
+
+				// Determine if we have to generate the entire cluster differently.
+				failoverThroughMeshGateway := chain.WillFailoverThroughMeshGateway(node)
+
+				if failoverThroughMeshGateway {
+					actualTargetID := firstHealthyTarget(
+						chain.Targets,
+						cfgSnap.ConnectProxy.WatchedUpstreamEndpoints[id],
+						targetID,
+						failover.Targets,
+					)
+					if actualTargetID != targetID {
+						targetID = actualTargetID
+						target = chain.Targets[actualTargetID]
+					}
+
+					failover = nil
 				}
 
-				var (
-					endpointGroups         []loadAssignmentEndpointGroup
-					overprovisioningFactor int
+				primaryGroup, valid := makeLoadAssignmentEndpointGroup(
+					chain.Targets,
+					cfgSnap.ConnectProxy.WatchedUpstreamEndpoints[id],
+					cfgSnap.ConnectProxy.WatchedGatewayEndpoints[id],
+					targetID,
+					cfgSnap.Datacenter,
 				)
-
-				primaryGroup := loadAssignmentEndpointGroup{
-					Endpoints:   endpoints,
-					OnlyPassing: chain.SubsetDefinitionForTarget(target).OnlyPassing,
+				if !valid {
+					continue // skip the cluster if we're still populating the snapshot
 				}
+
+				var endpointGroups []loadAssignmentEndpointGroup
 
 				if failover != nil && len(failover.Targets) > 0 {
 					endpointGroups = make([]loadAssignmentEndpointGroup, 0, len(failover.Targets)+1)
 
 					endpointGroups = append(endpointGroups, primaryGroup)
 
-					if failover.Definition.OverprovisioningFactor > 0 {
-						overprovisioningFactor = failover.Definition.OverprovisioningFactor
-					}
-					if overprovisioningFactor <= 0 {
-						// We choose such a large value here that the failover math should
-						// in effect not happen until zero instances are healthy.
-						overprovisioningFactor = 100000
-					}
-
-					for _, failTarget := range failover.Targets {
-						failEndpoints, ok := chainEndpointMap[failTarget]
-						if !ok {
-							continue // skip the failover target (should not happen)
+					for _, failTargetID := range failover.Targets {
+						failoverGroup, valid := makeLoadAssignmentEndpointGroup(
+							chain.Targets,
+							cfgSnap.ConnectProxy.WatchedUpstreamEndpoints[id],
+							cfgSnap.ConnectProxy.WatchedGatewayEndpoints[id],
+							failTargetID,
+							cfgSnap.Datacenter,
+						)
+						if !valid {
+							continue // skip the failover target if we're still populating the snapshot
 						}
-
-						endpointGroups = append(endpointGroups, loadAssignmentEndpointGroup{
-							Endpoints:   failEndpoints,
-							OnlyPassing: chain.SubsetDefinitionForTarget(failTarget).OnlyPassing,
-						})
+						endpointGroups = append(endpointGroups, failoverGroup)
 					}
 				} else {
 					endpointGroups = append(endpointGroups, primaryGroup)
 				}
 
-				sni := TargetSNI(target, cfgSnap)
-
 				la := makeLoadAssignment(
-					sni,
-					overprovisioningFactor,
+					clusterName,
 					endpointGroups,
 					cfgSnap.Datacenter,
 				)
@@ -142,10 +154,9 @@ func (s *Server) endpointsFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsh
 
 	// generate the endpoints for the gateways in the remote datacenters
 	for dc, endpoints := range cfgSnap.MeshGateway.GatewayGroups {
-		clusterName := DatacenterSNI(dc, cfgSnap)
+		clusterName := connect.DatacenterSNI(dc, cfgSnap.Roots.TrustDomain)
 		la := makeLoadAssignment(
 			clusterName,
-			0,
 			[]loadAssignmentEndpointGroup{
 				{Endpoints: endpoints},
 			},
@@ -156,10 +167,9 @@ func (s *Server) endpointsFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsh
 
 	// generate the endpoints for the local service groups
 	for svc, endpoints := range cfgSnap.MeshGateway.ServiceGroups {
-		clusterName := ServiceSNI(svc, "", "default", cfgSnap.Datacenter, cfgSnap)
+		clusterName := connect.ServiceSNI(svc, "", "default", cfgSnap.Datacenter, cfgSnap.Roots.TrustDomain)
 		la := makeLoadAssignment(
 			clusterName,
-			0,
 			[]loadAssignmentEndpointGroup{
 				{Endpoints: endpoints},
 			},
@@ -171,7 +181,7 @@ func (s *Server) endpointsFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsh
 	// generate the endpoints for the service subsets
 	for svc, resolver := range cfgSnap.MeshGateway.ServiceResolvers {
 		for subsetName, subset := range resolver.Subsets {
-			clusterName := ServiceSNI(svc, subsetName, "default", cfgSnap.Datacenter, cfgSnap)
+			clusterName := connect.ServiceSNI(svc, subsetName, "default", cfgSnap.Datacenter, cfgSnap.Roots.TrustDomain)
 
 			endpoints := cfgSnap.MeshGateway.ServiceGroups[svc]
 
@@ -191,7 +201,6 @@ func (s *Server) endpointsFromSnapshotMeshGateway(cfgSnap *proxycfg.ConfigSnapsh
 
 			la := makeLoadAssignment(
 				clusterName,
-				0,
 				[]loadAssignmentEndpointGroup{
 					{
 						Endpoints:   endpoints,
@@ -218,23 +227,22 @@ func makeEndpoint(clusterName, host string, port int) envoyendpoint.LbEndpoint {
 }
 
 type loadAssignmentEndpointGroup struct {
-	Endpoints   structs.CheckServiceNodes
-	OnlyPassing bool
+	Endpoints      structs.CheckServiceNodes
+	OnlyPassing    bool
+	OverrideHealth envoycore.HealthStatus
 }
 
-func makeLoadAssignment(
-	clusterName string,
-	overprovisioningFactor int,
-	endpointGroups []loadAssignmentEndpointGroup,
-	localDatacenter string,
-) *envoy.ClusterLoadAssignment {
+func makeLoadAssignment(clusterName string, endpointGroups []loadAssignmentEndpointGroup, localDatacenter string) *envoy.ClusterLoadAssignment {
 	cla := &envoy.ClusterLoadAssignment{
 		ClusterName: clusterName,
 		Endpoints:   make([]envoyendpoint.LocalityLbEndpoints, 0, len(endpointGroups)),
 	}
-	if overprovisioningFactor > 0 {
+
+	if len(endpointGroups) > 1 {
 		cla.Policy = &envoy.ClusterLoadAssignment_Policy{
-			OverprovisioningFactor: makeUint32Value(overprovisioningFactor),
+			// We choose such a large value here that the failover math should
+			// in effect not happen until zero instances are healthy.
+			OverprovisioningFactor: makeUint32Value(100000),
 		}
 	}
 
@@ -245,33 +253,12 @@ func makeLoadAssignment(
 		for _, ep := range endpoints {
 			// TODO (mesh-gateway) - should we respect the translate_wan_addrs configuration here or just always use the wan for cross-dc?
 			addr, port := ep.BestAddress(localDatacenter != ep.Node.Datacenter)
-			healthStatus := envoycore.HealthStatus_HEALTHY
-			weight := 1
-			if ep.Service.Weights != nil {
-				weight = ep.Service.Weights.Passing
+			healthStatus, weight := calculateEndpointHealthAndWeight(ep, endpointGroup.OnlyPassing)
+
+			if endpointGroup.OverrideHealth != envoycore.HealthStatus_UNKNOWN {
+				healthStatus = endpointGroup.OverrideHealth
 			}
 
-			for _, chk := range ep.Checks {
-				if chk.Status == api.HealthCritical {
-					healthStatus = envoycore.HealthStatus_UNHEALTHY
-				}
-				if endpointGroup.OnlyPassing && chk.Status != api.HealthPassing {
-					healthStatus = envoycore.HealthStatus_UNHEALTHY
-				}
-				if chk.Status == api.HealthWarning && ep.Service.Weights != nil {
-					weight = ep.Service.Weights.Warning
-				}
-			}
-			// Make weights fit Envoy's limits. A zero weight means that either Warning
-			// (likely) or Passing (weirdly) weight has been set to 0 effectively making
-			// this instance unhealthy and should not be sent traffic.
-			if weight < 1 {
-				healthStatus = envoycore.HealthStatus_UNHEALTHY
-				weight = 1
-			}
-			if weight > 128 {
-				weight = 128
-			}
 			es = append(es, envoyendpoint.LbEndpoint{
 				HostIdentifier: &envoyendpoint.LbEndpoint_Endpoint{
 					Endpoint: &envoyendpoint.Endpoint{
@@ -290,4 +277,90 @@ func makeLoadAssignment(
 	}
 
 	return cla
+}
+
+func makeLoadAssignmentEndpointGroup(
+	targets map[string]*structs.DiscoveryTarget,
+	targetHealth map[string]structs.CheckServiceNodes,
+	gatewayHealth map[string]structs.CheckServiceNodes,
+	targetID string,
+	currentDatacenter string,
+) (loadAssignmentEndpointGroup, bool) {
+	realEndpoints, ok := targetHealth[targetID]
+	if !ok {
+		// skip the cluster if we're still populating the snapshot
+		return loadAssignmentEndpointGroup{}, false
+	}
+	target := targets[targetID]
+
+	var gatewayDatacenter string
+	switch target.MeshGateway.Mode {
+	case structs.MeshGatewayModeRemote:
+		gatewayDatacenter = target.Datacenter
+	case structs.MeshGatewayModeLocal:
+		gatewayDatacenter = currentDatacenter
+	}
+
+	if gatewayDatacenter == "" {
+		return loadAssignmentEndpointGroup{
+			Endpoints:   realEndpoints,
+			OnlyPassing: target.Subset.OnlyPassing,
+		}, true
+	}
+
+	// If using a mesh gateway we need to pull those endpoints instead.
+	gatewayEndpoints, ok := gatewayHealth[gatewayDatacenter]
+	if !ok {
+		// skip the cluster if we're still populating the snapshot
+		return loadAssignmentEndpointGroup{}, false
+	}
+
+	// But we will use the health from the actual backend service.
+	overallHealth := envoycore.HealthStatus_UNHEALTHY
+	for _, ep := range realEndpoints {
+		health, _ := calculateEndpointHealthAndWeight(ep, target.Subset.OnlyPassing)
+		if health == envoycore.HealthStatus_HEALTHY {
+			overallHealth = envoycore.HealthStatus_HEALTHY
+			break
+		}
+	}
+
+	return loadAssignmentEndpointGroup{
+		Endpoints:      gatewayEndpoints,
+		OverrideHealth: overallHealth,
+	}, true
+}
+
+func calculateEndpointHealthAndWeight(
+	ep structs.CheckServiceNode,
+	onlyPassing bool,
+) (envoycore.HealthStatus, int) {
+	healthStatus := envoycore.HealthStatus_HEALTHY
+	weight := 1
+	if ep.Service.Weights != nil {
+		weight = ep.Service.Weights.Passing
+	}
+
+	for _, chk := range ep.Checks {
+		if chk.Status == api.HealthCritical {
+			healthStatus = envoycore.HealthStatus_UNHEALTHY
+		}
+		if onlyPassing && chk.Status != api.HealthPassing {
+			healthStatus = envoycore.HealthStatus_UNHEALTHY
+		}
+		if chk.Status == api.HealthWarning && ep.Service.Weights != nil {
+			weight = ep.Service.Weights.Warning
+		}
+	}
+	// Make weights fit Envoy's limits. A zero weight means that either Warning
+	// (likely) or Passing (weirdly) weight has been set to 0 effectively making
+	// this instance unhealthy and should not be sent traffic.
+	if weight < 1 {
+		healthStatus = envoycore.HealthStatus_UNHEALTHY
+		weight = 1
+	}
+	if weight > 128 {
+		weight = 128
+	}
+	return healthStatus, weight
 }

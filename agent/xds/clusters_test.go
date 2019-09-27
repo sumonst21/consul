@@ -67,6 +67,17 @@ func TestClustersFromSnapshot(t *testing.T) {
 			},
 		},
 		{
+			name:   "custom-upstream-default-chain",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainDefault,
+			setup: func(snap *proxycfg.ConfigSnapshot) {
+				snap.Proxy.Upstreams[0].Config["envoy_cluster_json"] =
+					customAppClusterJSON(t, customClusterJSONOptions{
+						Name:        "myservice",
+						IncludeType: false,
+					})
+			},
+		},
+		{
 			name:               "custom-upstream-typed",
 			create:             proxycfg.TestConfigSnapshot,
 			overrideGoldenName: "custom-upstream",
@@ -106,8 +117,58 @@ func TestClustersFromSnapshot(t *testing.T) {
 			setup:  nil,
 		},
 		{
+			name:   "connect-proxy-with-chain-external-sni",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainExternalSNI,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-chain-and-overrides",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithOverrides,
+			setup:  nil,
+		},
+		{
 			name:   "connect-proxy-with-chain-and-failover",
 			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailover,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-remote-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughRemoteGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-remote-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughRemoteGatewayTriggered,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-remote-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughRemoteGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-remote-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughRemoteGatewayTriggered,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-local-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughLocalGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-failover-through-local-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailoverThroughLocalGatewayTriggered,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-local-gateway",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughLocalGateway,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-tcp-chain-double-failover-through-local-gateway-triggered",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithDoubleFailoverThroughLocalGatewayTriggered,
 			setup:  nil,
 		},
 		{
@@ -231,7 +292,11 @@ func expectClustersJSONResources(t *testing.T, snap *proxycfg.ConfigSnapshot, to
 				"outlierDetection": {
 
 				},
-				"connectTimeout": "1s",
+				"altStatName": "db.default.dc1.internal.11111111-2222-3333-4444-555555555555.consul",
+				"commonLbConfig": {
+					"healthyPanicThreshold": {}
+				},
+				"connectTimeout": "5s",
 				"tlsContext": ` + expectedUpstreamTLSContextJSON(t, snap, "db.default.dc1.internal.11111111-2222-3333-4444-555555555555.consul") + `
 			}`,
 		"prepared_query:geo-cache": `
@@ -331,7 +396,7 @@ var customAppClusterJSONTpl = `{
 	"tlsContext": {{ .TLSContext }},
 	{{- end }}
 	"name": "{{ .Name }}",
-	"connectTimeout": "5s",
+	"connectTimeout": "15s",
 	"hosts": [
 		{
 			"socketAddress": {

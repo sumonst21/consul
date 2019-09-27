@@ -442,15 +442,17 @@ func (s *Store) testCompileDiscoveryChain(
 		return err
 	}
 
-	// TODO(rb): is this ok that we execute the compiler in the state store?
-
 	// Note we use an arbitrary namespace and datacenter as those would not
 	// currently affect the graph compilation in ways that matter here.
+	//
+	// TODO(rb): we should thread a better value than "dc1" and the throwaway trust domain down here as that is going to sometimes show up in user facing errors
 	req := discoverychain.CompileRequest{
-		ServiceName:       chainName,
-		CurrentNamespace:  "default",
-		CurrentDatacenter: "dc1",
-		Entries:           speculativeEntries,
+		ServiceName:           chainName,
+		EvaluateInNamespace:   "default",
+		EvaluateInDatacenter:  "dc1",
+		EvaluateInTrustDomain: "b6fc9da3-03d4-4b5a-9134-c045e9b20152.consul",
+		UseInDatacenter:       "dc1",
+		Entries:               speculativeEntries,
 	}
 	_, err = discoverychain.Compile(req)
 	return err

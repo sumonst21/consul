@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -317,6 +318,42 @@ type ServiceRouteDestination struct {
 	RetryOnStatusCodes []uint32 `json:",omitempty"`
 }
 
+func (e *ServiceRouteDestination) MarshalJSON() ([]byte, error) {
+	type Alias ServiceRouteDestination
+	exported := &struct {
+		RequestTimeout string `json:",omitempty"`
+		*Alias
+	}{
+		RequestTimeout: e.RequestTimeout.String(),
+		Alias:          (*Alias)(e),
+	}
+	if e.RequestTimeout == 0 {
+		exported.RequestTimeout = ""
+	}
+
+	return json.Marshal(exported)
+}
+
+func (e *ServiceRouteDestination) UnmarshalJSON(data []byte) error {
+	type Alias ServiceRouteDestination
+	aux := &struct {
+		RequestTimeout string
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	var err error
+	if aux.RequestTimeout != "" {
+		if e.RequestTimeout, err = time.ParseDuration(aux.RequestTimeout); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (d *ServiceRouteDestination) HasRetryFeatures() bool {
 	return d.NumRetries > 0 || d.RetryOnConnectFailure || len(d.RetryOnStatusCodes) > 0
 }
@@ -563,6 +600,42 @@ type ServiceResolverConfigEntry struct {
 	RaftIndex
 }
 
+func (e *ServiceResolverConfigEntry) MarshalJSON() ([]byte, error) {
+	type Alias ServiceResolverConfigEntry
+	exported := &struct {
+		ConnectTimeout string `json:",omitempty"`
+		*Alias
+	}{
+		ConnectTimeout: e.ConnectTimeout.String(),
+		Alias:          (*Alias)(e),
+	}
+	if e.ConnectTimeout == 0 {
+		exported.ConnectTimeout = ""
+	}
+
+	return json.Marshal(exported)
+}
+
+func (e *ServiceResolverConfigEntry) UnmarshalJSON(data []byte) error {
+	type Alias ServiceResolverConfigEntry
+	aux := &struct {
+		ConnectTimeout string
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	var err error
+	if aux.ConnectTimeout != "" {
+		if e.ConnectTimeout, err = time.ParseDuration(aux.ConnectTimeout); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *ServiceResolverConfigEntry) SubsetExists(name string) bool {
 	if name == "" {
 		return true
@@ -677,10 +750,6 @@ func (e *ServiceResolverConfigEntry) Validate() error {
 				}
 			}
 
-			if f.OverprovisioningFactor < 0 {
-				return fmt.Errorf("Bad Failover[%q].OverprovisioningFactor '%d', must be >= 0", subset, f.OverprovisioningFactor)
-			}
-
 			for _, dc := range f.Datacenters {
 				if dc == "" {
 					return fmt.Errorf("Bad Failover[%q].Datacenters: found empty datacenter", subset)
@@ -783,10 +852,8 @@ type ServiceResolverRedirect struct {
 
 // There are some restrictions on what is allowed in here:
 //
-// - Service, ServiceSubset, Namespace, NearestN, and Datacenters cannot all be
+// - Service, ServiceSubset, Namespace, and Datacenters cannot all be
 //   empty at once.
-//
-// - Both 'NearestN' and 'Datacenters' may be specified at once.
 //
 type ServiceResolverFailover struct {
 	// Service is the service to resolve instead of the default as the failover
@@ -809,27 +876,12 @@ type ServiceResolverFailover struct {
 	// This is a DESTINATION during failover.
 	Namespace string `json:",omitempty"`
 
-	// NearestN is set to the number of remote datacenters to try, based on
-	// network coordinates.
-	//
-	// This is a DESTINATION during failover.
-	//
-	// TODO(rb): bring this back after normal DC failover works
-	// NearestN int `json:",omitempty"`
-
-	// Datacenters is a fixed list of datacenters to try after NearestN.  We
-	// never try a datacenter multiple times, so those are subtracted from this
-	// list before proceeding.
+	// Datacenters is a fixed list of datacenters to try. We never try a
+	// datacenter multiple times, so those are subtracted from this list before
+	// proceeding.
 	//
 	// This is a DESTINATION during failover.
 	Datacenters []string `json:",omitempty"`
-
-	// OverprovisioningFactor is a pass through for envoy's
-	// overprovisioning_factor value.
-	//
-	// If omitted the overprovisioning factor value will be set so high as to
-	// imply binary failover (all or nothing).
-	OverprovisioningFactor int `json:",omitempty"`
 }
 
 type discoveryChainConfigEntry interface {
@@ -986,10 +1038,29 @@ func (e *DiscoveryChainConfigEntries) IsChainEmpty() bool {
 // DiscoveryChainRequest is used when requesting the discovery chain for a
 // service.
 type DiscoveryChainRequest struct {
-	Name       string
-	Datacenter string
-	// Source      QuerySource
+	Name                 string
+	EvaluateInDatacenter string
+	EvaluateInNamespace  string
 
+	// OverrideMeshGateway allows for the mesh gateway setting to be overridden
+	// for any resolver in the compiled chain.
+	OverrideMeshGateway MeshGatewayConfig
+
+	// OverrideProtocol allows for the final protocol for the chain to be
+	// altered.
+	//
+	// - If the chain ordinarily would be TCP and an L7 protocol is passed here
+	// the chain will not include Routers or Splitters.
+	//
+	// - If the chain ordinarily would be L7 and TCP is passed here the chain
+	// will not include Routers or Splitters.
+	OverrideProtocol string
+
+	// OverrideConnectTimeout allows for the ConnectTimeout setting to be
+	// overridden for any resolver in the compiled chain.
+	OverrideConnectTimeout time.Duration
+
+	Datacenter string // where to route the RPC
 	QueryOptions
 }
 
@@ -1008,9 +1079,19 @@ func (r *DiscoveryChainRequest) CacheInfo() cache.RequestInfo {
 	}
 
 	v, err := hashstructure.Hash(struct {
-		Name string
+		Name                   string
+		EvaluateInDatacenter   string
+		EvaluateInNamespace    string
+		OverrideMeshGateway    MeshGatewayConfig
+		OverrideProtocol       string
+		OverrideConnectTimeout time.Duration
 	}{
-		Name: r.Name,
+		Name:                   r.Name,
+		EvaluateInDatacenter:   r.EvaluateInDatacenter,
+		EvaluateInNamespace:    r.EvaluateInNamespace,
+		OverrideMeshGateway:    r.OverrideMeshGateway,
+		OverrideProtocol:       r.OverrideProtocol,
+		OverrideConnectTimeout: r.OverrideConnectTimeout,
 	}, nil)
 	if err == nil {
 		// If there is an error, we don't set the key. A blank key forces
@@ -1022,10 +1103,8 @@ func (r *DiscoveryChainRequest) CacheInfo() cache.RequestInfo {
 	return info
 }
 
-// TODO(rb): either fix the compiled results, or take the derived data and stash it here in a json/msgpack-friendly way?
 type DiscoveryChainResponse struct {
-	ConfigEntries *DiscoveryChainConfigEntries `json:",omitempty"` // TODO(rb): remove these?
-	Chain         *CompiledDiscoveryChain      `json:",omitempty"`
+	Chain *CompiledDiscoveryChain
 	QueryMeta
 }
 

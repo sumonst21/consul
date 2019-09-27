@@ -52,6 +52,8 @@ type ServiceConfigEntry struct {
 	Protocol    string
 	MeshGateway MeshGatewayConfig `json:",omitempty"`
 
+	ExternalSNI string `json:",omitempty"`
+
 	// TODO(banks): enable this once we have upstreams supported too. Enabling
 	// sidecars actually makes no sense and adds complications when you don't
 	// allow upstreams to be specified centrally too.
@@ -79,11 +81,7 @@ func (e *ServiceConfigEntry) Normalize() error {
 	}
 
 	e.Kind = ServiceDefaults
-	if e.Protocol == "" {
-		e.Protocol = DefaultServiceProtocol
-	} else {
-		e.Protocol = strings.ToLower(e.Protocol)
-	}
+	e.Protocol = strings.ToLower(e.Protocol)
 
 	return nil
 }
@@ -306,6 +304,7 @@ func ConfigEntryDecodeRulesForKind(kind string) (skipWhenPatching []string, tran
 	case ServiceDefaults:
 		return nil, map[string]string{
 			"mesh_gateway": "meshgateway",
+			"external_sni": "externalsni",
 		}, nil
 	case ServiceRouter:
 		return []string{
@@ -336,11 +335,10 @@ func ConfigEntryDecodeRulesForKind(kind string) (skipWhenPatching []string, tran
 			}, nil
 	case ServiceResolver:
 		return nil, map[string]string{
-			"connect_timeout":         "connecttimeout",
-			"default_subset":          "defaultsubset",
-			"only_passing":            "onlypassing",
-			"overprovisioning_factor": "overprovisioningfactor",
-			"service_subset":          "servicesubset",
+			"connect_timeout": "connecttimeout",
+			"default_subset":  "defaultsubset",
+			"only_passing":    "onlypassing",
+			"service_subset":  "servicesubset",
 		}, nil
 	default:
 		return nil, nil, fmt.Errorf("kind %q should be explicitly handled here", kind)
@@ -537,6 +535,12 @@ type ServiceConfigResponse struct {
 	UpstreamConfigs map[string]map[string]interface{}
 	MeshGateway     MeshGatewayConfig `json:",omitempty"`
 	QueryMeta
+}
+
+func (r *ServiceConfigResponse) Reset() {
+	r.ProxyConfig = nil
+	r.UpstreamConfigs = nil
+	r.MeshGateway = MeshGatewayConfig{}
 }
 
 // MarshalBinary writes ServiceConfigResponse as msgpack encoded. It's only here

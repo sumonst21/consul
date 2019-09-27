@@ -12,6 +12,7 @@ import (
 
 	"github.com/hashicorp/consul/agent/cache"
 	cachetype "github.com/hashicorp/consul/agent/cache-types"
+	"github.com/hashicorp/consul/agent/connect"
 	"github.com/hashicorp/consul/agent/consul/discoverychain"
 	"github.com/hashicorp/consul/agent/local"
 	"github.com/hashicorp/consul/agent/structs"
@@ -45,25 +46,13 @@ func TestManager_BasicLifecycle(t *testing.T) {
 	// Create a bunch of common data for the various test cases.
 	roots, leaf := TestCerts(t)
 
-	dbTarget := structs.DiscoveryTarget{
-		Service:    "db",
-		Namespace:  "default",
-		Datacenter: "dc1",
-	}
-	dbTarget_v1 := structs.DiscoveryTarget{
-		Service:       "db",
-		ServiceSubset: "v1",
-		Namespace:     "default",
-		Datacenter:    "dc1",
-	}
-	dbTarget_v2 := structs.DiscoveryTarget{
-		Service:       "db",
-		ServiceSubset: "v2",
-		Namespace:     "default",
-		Datacenter:    "dc1",
-	}
 	dbDefaultChain := func() *structs.CompiledDiscoveryChain {
-		return discoverychain.TestCompileConfigEntries(t, "db", "default", "dc1",
+		return discoverychain.TestCompileConfigEntries(t, "db", "default", "dc1", connect.TestClusterID+".consul", "dc1",
+			func(req *discoverychain.CompileRequest) {
+				// This is because structs.TestUpstreams uses an opaque config
+				// to override connect timeouts.
+				req.OverrideConnectTimeout = 1 * time.Second
+			},
 			&structs.ServiceResolverConfigEntry{
 				Kind: structs.ServiceResolver,
 				Name: "db",
@@ -71,7 +60,12 @@ func TestManager_BasicLifecycle(t *testing.T) {
 		)
 	}
 	dbSplitChain := func() *structs.CompiledDiscoveryChain {
-		return discoverychain.TestCompileConfigEntries(t, "db", "default", "dc1",
+		return discoverychain.TestCompileConfigEntries(t, "db", "default", "dc1", "trustdomain.consul", "dc1",
+			func(req *discoverychain.CompileRequest) {
+				// This is because structs.TestUpstreams uses an opaque config
+				// to override connect timeouts.
+				req.OverrideConnectTimeout = 1 * time.Second
+			},
 			&structs.ProxyConfigEntry{
 				Kind: structs.ProxyDefaults,
 				Name: structs.ProxyConfigGlobal,
@@ -142,9 +136,14 @@ func TestManager_BasicLifecycle(t *testing.T) {
 	})
 
 	dbChainCacheKey := testGenCacheKey(&structs.DiscoveryChainRequest{
-		Datacenter:   "dc1",
-		QueryOptions: structs.QueryOptions{Token: "my-token"},
-		Name:         "db",
+		Name:                 "db",
+		EvaluateInDatacenter: "dc1",
+		EvaluateInNamespace:  "default",
+		// This is because structs.TestUpstreams uses an opaque config
+		// to override connect timeouts.
+		OverrideConnectTimeout: 1 * time.Second,
+		Datacenter:             "dc1",
+		QueryOptions:           structs.QueryOptions{Token: "my-token"},
 	})
 
 	dbHealthCacheKey := testGenCacheKey(&structs.ServiceSpecificRequest{
@@ -198,10 +197,14 @@ func TestManager_BasicLifecycle(t *testing.T) {
 						"db": dbDefaultChain(),
 					},
 					WatchedUpstreams: nil, // Clone() clears this out
-					WatchedUpstreamEndpoints: map[string]map[structs.DiscoveryTarget]structs.CheckServiceNodes{
+					WatchedUpstreamEndpoints: map[string]map[string]structs.CheckServiceNodes{
 						"db": {
-							dbTarget: TestUpstreamNodes(t),
+							"db.default.dc1": TestUpstreamNodes(t),
 						},
+					},
+					WatchedGateways: nil, // Clone() clears this out
+					WatchedGatewayEndpoints: map[string]map[string]structs.CheckServiceNodes{
+						"db": {},
 					},
 					UpstreamEndpoints: map[string]structs.CheckServiceNodes{},
 				},
@@ -237,11 +240,15 @@ func TestManager_BasicLifecycle(t *testing.T) {
 						"db": dbSplitChain(),
 					},
 					WatchedUpstreams: nil, // Clone() clears this out
-					WatchedUpstreamEndpoints: map[string]map[structs.DiscoveryTarget]structs.CheckServiceNodes{
+					WatchedUpstreamEndpoints: map[string]map[string]structs.CheckServiceNodes{
 						"db": {
-							dbTarget_v1: TestUpstreamNodes(t),
-							dbTarget_v2: TestUpstreamNodesAlternate(t),
+							"v1.db.default.dc1": TestUpstreamNodes(t),
+							"v2.db.default.dc1": TestUpstreamNodesAlternate(t),
 						},
+					},
+					WatchedGateways: nil, // Clone() clears this out
+					WatchedGatewayEndpoints: map[string]map[string]structs.CheckServiceNodes{
+						"db": {},
 					},
 					UpstreamEndpoints: map[string]structs.CheckServiceNodes{},
 				},

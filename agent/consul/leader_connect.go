@@ -43,7 +43,7 @@ var (
 // when setting up the CA during establishLeadership
 func (s *Server) initializeCAConfig() (*structs.CAConfiguration, error) {
 	state := s.fsm.State()
-	_, config, err := state.CAConfig()
+	_, config, err := state.CAConfig(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -209,11 +209,27 @@ func (s *Server) initializeRootCA(provider ca.Provider, conf *structs.CAConfigur
 	if err != nil {
 		return fmt.Errorf("error getting root cert: %v", err)
 	}
-
 	rootCA, err := parseCARoot(rootPEM, conf.Provider, conf.ClusterID)
 	if err != nil {
 		return err
 	}
+
+	// Also create the intermediate CA, which is the one that actually signs leaf certs
+	interPEM, err := provider.GenerateIntermediate()
+	if err != nil {
+		return fmt.Errorf("error generating intermediate cert: %v", err)
+	}
+	_, err = connect.ParseCert(interPEM)
+	if err != nil {
+		return fmt.Errorf("error getting intermediate cert: %v", err)
+	}
+
+	commonConfig, err := conf.GetCommonConfig()
+	if err != nil {
+		return err
+	}
+	rootCA.PrivateKeyType = commonConfig.PrivateKeyType
+	rootCA.PrivateKeyBits = commonConfig.PrivateKeyBits
 
 	// Check if the CA root is already initialized and exit if it is,
 	// adding on any existing intermediate certs since they aren't directly
@@ -298,19 +314,46 @@ func (s *Server) initializeSecondaryCA(provider ca.Provider, roots structs.Index
 		return fmt.Errorf("primary datacenter does not have an active root CA for Connect")
 	}
 
+	newIntermediate := false
+	// Get a signed intermediate from the primary DC if the provider
+	// hasn't been initialized yet or if the primary's root has changed.
+	if activeIntermediate == "" || storedRootID != roots.ActiveRootID {
+		csr, err := provider.GenerateIntermediateCSR()
+		if err != nil {
+			return err
+		}
+
+		var intermediatePEM string
+		if err := s.forwardDC("ConnectCA.SignIntermediate", s.config.PrimaryDatacenter, s.generateCASignRequest(csr), &intermediatePEM); err != nil {
+			// this is a failure in the primary and shouldn't be capable of erroring out our establishing leadership
+			s.logger.Printf("[WARN] connect: Primary datacenter refused to sign our intermediate CA certificate: %v", err)
+			return nil
+		}
+
+		if err := provider.SetIntermediate(intermediatePEM, newActiveRoot.RootCert); err != nil {
+			return fmt.Errorf("Failed to set the intermediate certificate with the CA provider: %v", err)
+		}
+
+		// Append the new intermediate to our local active root entry.
+		newActiveRoot.IntermediateCerts = append(newActiveRoot.IntermediateCerts, intermediatePEM)
+		newIntermediate = true
+
+		s.logger.Printf("[INFO] connect: received new intermediate certificate from primary datacenter")
+	}
+
 	// Update the roots list in the state store if there's a new active root.
 	state := s.fsm.State()
 	_, activeRoot, err := state.CARootActive(nil)
 	if err != nil {
 		return err
 	}
-	if activeRoot == nil || activeRoot.ID != newActiveRoot.ID {
+	if activeRoot == nil || activeRoot.ID != newActiveRoot.ID || newIntermediate {
 		idx, oldRoots, err := state.CARoots(nil)
 		if err != nil {
 			return err
 		}
 
-		_, config, err := state.CAConfig()
+		_, config, err := state.CAConfig(nil)
 		if err != nil {
 			return err
 		}
@@ -354,29 +397,6 @@ func (s *Server) initializeSecondaryCA(provider ca.Provider, roots structs.Index
 		}
 
 		s.logger.Printf("[INFO] connect: updated root certificates from primary datacenter")
-	}
-
-	// Get a signed intermediate from the primary DC if the provider
-	// hasn't been initialized yet or if the primary's root has changed.
-	if activeIntermediate == "" || storedRootID != roots.ActiveRootID {
-		csr, err := provider.GenerateIntermediateCSR()
-		if err != nil {
-			return err
-		}
-
-		var intermediatePEM string
-		if err := s.forwardDC("ConnectCA.SignIntermediate", s.config.PrimaryDatacenter, s.generateCASignRequest(csr), &intermediatePEM); err != nil {
-			return err
-		}
-
-		if err := provider.SetIntermediate(intermediatePEM, newActiveRoot.RootCert); err != nil {
-			return err
-		}
-
-		// Append the new intermediate to our local active root entry.
-		newActiveRoot.IntermediateCerts = append(newActiveRoot.IntermediateCerts, intermediatePEM)
-
-		s.logger.Printf("[INFO] connect: received new intermediate certificate from primary datacenter")
 	}
 
 	s.setCAProvider(provider, newActiveRoot)
@@ -459,7 +479,7 @@ func (s *Server) pruneCARoots() error {
 		return err
 	}
 
-	_, caConf, err := state.CAConfig()
+	_, caConf, err := state.CAConfig(nil)
 	if err != nil {
 		return err
 	}
@@ -558,13 +578,15 @@ func (s *Server) secondaryCARootWatch(stopCh <-chan struct{}) {
 // the intentions there to the local state.
 func (s *Server) replicateIntentions(stopCh <-chan struct{}) {
 	args := structs.DCSpecificRequest{
-		Datacenter:   s.config.PrimaryDatacenter,
-		QueryOptions: structs.QueryOptions{Token: s.tokens.ReplicationToken()},
+		Datacenter: s.config.PrimaryDatacenter,
 	}
 
 	s.logger.Printf("[DEBUG] connect: starting Connect intention replication from primary datacenter %q", s.config.PrimaryDatacenter)
 
 	retryLoopBackoff(stopCh, func() error {
+		// Always use the latest replication token value in case it changed while looping.
+		args.QueryOptions.Token = s.tokens.ReplicationToken()
+
 		var remote structs.IndexedIntentions
 		if err := s.forwardDC("Intention.List", s.config.PrimaryDatacenter, &args, &remote); err != nil {
 			return err
@@ -725,7 +747,7 @@ func (s *Server) initializeSecondaryProvider(provider ca.Provider, roots structs
 	}
 
 	clusterID := strings.Split(roots.TrustDomain, ".")[0]
-	_, conf, err := s.fsm.State().CAConfig()
+	_, conf, err := s.fsm.State().CAConfig(nil)
 	if err != nil {
 		return err
 	}

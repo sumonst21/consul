@@ -1,12 +1,14 @@
 ---
 layout: "docs"
-page_title: "Configuration Entry Kind: Service Resolver (beta)"
+page_title: "Configuration Entry Kind: Service Resolver"
 sidebar_current: "docs-agent-cfg_entries-service_resolver"
 description: |-
   The `service-resolver` config entry kind controls which service instances should satisfy Connect upstream discovery requests for a given service name.
 ---
 
-# Service Resolver <sup>(beta)</sup>
+-> **1.6.0+:**  This config entry is available in Consul versions 1.6.0 and newer.
+
+# Service Resolver
 
 The `service-resolver` config entry kind controls which service instances
 should satisfy Connect upstream discovery requests for a given service name.
@@ -145,14 +147,6 @@ name = "web"
 
   - `Datacenters` `(array<string>)` - A fixed list of datacenters to try during
     failover.
-
-  - `OverprovisioningFactor` `(int: 0)` - OverprovisioningFactor is a pass
-    through for envoy's
-    [`overprovisioning_factor`](https://www.envoyproxy.io/docs/envoy/v1.10.0/intro/arch_overview/load_balancing/priority)
-    value.
-
-        If omitted the overprovisioning factor value will be set so high as to
-        imply binary failover (all or nothing).
 
 ## Service Subsets
 

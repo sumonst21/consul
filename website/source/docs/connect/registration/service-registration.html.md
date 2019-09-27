@@ -127,17 +127,6 @@ registering a proxy instance.
 
 The following examples show all possible upstream configuration parameters.
 
-Note that in versions 1.2.0 to 1.3.0, managed proxy upstreams were specified
-inside the opaque `connect.proxy.config` map. The format is almost unchanged
-however managed proxy upstreams are now defined a level up in the
-`connect.proxy.upstreams`. The old location is deprecated and will be
-automatically converted into the new for an interim period before support is
-dropped in a future major release. The only difference in format between the
-upstream definitions is that the field `destination_datacenter` has been renamed
-to `datacenter` to reflect that it's the discovery target and not necessarily
-the same as the instance that will be returned in the case of a prepared query
-that fails over to another datacenter.
-
 Note that `snake_case` is used here as it works in both [config file and API
 registrations](/docs/agent/services.html#service-definition-parameter-case).
 
@@ -198,7 +187,7 @@ followed by documentation for each attribute.
    for this proxy. The format is defined in the [Mesh Gateway Configuration Reference](#mesh-gateway-configuration-reference).
 
 
-### Mesh Gateway Configuration Reference <sup>(beta)</sup>
+### Mesh Gateway Configuration Reference
 
 The following examples show all possible mesh gateway configurations.
 
