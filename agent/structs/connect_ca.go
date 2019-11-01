@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -228,7 +229,35 @@ type CAConfiguration struct {
 	// and maps).
 	Config map[string]interface{}
 
+	// ForceWithoutCrossSigning indicates that the CA reconfiguration should go
+	// ahead even if the current CA is unable to cross sign certificates. This
+	// risks temporary connection failures during the rollout as new leafs will be
+	// rejected by proxies that have not yet observed the new root cert but is the
+	// only option if a CA that doesn't support cross signing needs to be
+	// reconfigured or mirated away from.
+	ForceWithoutCrossSigning bool
+
 	RaftIndex
+}
+
+func (c *CAConfiguration) UnmarshalJSON(data []byte) (err error) {
+	type Alias CAConfiguration
+
+	aux := &struct {
+		ForceWithoutCrossSigningSnake bool `json:"force_without_cross_signing"`
+
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+	if err = json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.ForceWithoutCrossSigningSnake {
+		c.ForceWithoutCrossSigning = aux.ForceWithoutCrossSigningSnake
+	}
+
+	return nil
 }
 
 func (c *CAConfiguration) GetCommonConfig() (*CommonCAProviderConfig, error) {
@@ -338,6 +367,12 @@ type ConsulCAProviderConfig struct {
 	PrivateKey     string
 	RootCert       string
 	RotationPeriod time.Duration
+
+	// DisableCrossSigning is really only useful in test code to use the built in
+	// provider while exercising logic that depends on the CA provider ability to
+	// cross sign. We don't document this config field publicly or make any
+	// attempt to parse it from snake case unlike other fields here.
+	DisableCrossSigning bool
 }
 
 // CAConsulProviderState is used to track the built-in Consul CA provider's state.
