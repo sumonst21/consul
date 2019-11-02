@@ -137,7 +137,6 @@ and vice versa. A catalog entry can have either, neither, or both.
     "Definition": {
       "TCP": "localhost:8888",
       "Interval": "5s",
-      "Timeout": "1s",
       "DeregisterCriticalServiceAfter": "30s"
     }
   },

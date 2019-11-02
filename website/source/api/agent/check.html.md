@@ -224,7 +224,6 @@ The table below shows this endpoint's support for
   "Header": {"x-foo":["bar", "baz"]},
   "TCP": "example.com:22",
   "Interval": "10s",
-  "TTL": "15s",
   "TLSSkipVerify": true
 }
 ```

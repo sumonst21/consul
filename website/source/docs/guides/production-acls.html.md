@@ -214,11 +214,10 @@ the ACL system.
     	"id": "dashboard-check", 
     	"http": "http://localhost:9002/health", 
     	"method": "GET",
-    	"interval": "1s", 
-    	"timeout": "1s" 
-    	} 
-    } 
-} 
+    	"interval": "1s"
+    }
+  }
+}
 ```
 
 This service definition should be located in the [configuration
@@ -266,8 +265,7 @@ Finally, add the token to the service definition.
       "id": "dashboard-check",
       "http": "http://localhost:9002/health",
       "method": "GET",
-      "interval": "1s",
-      "timeout": "1s"
+      "interval": "1s"
     }
   }
 }

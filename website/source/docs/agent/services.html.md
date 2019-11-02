@@ -268,8 +268,7 @@ Multiple services definitions can be provided at once using the plural
       "checks": [
         {
           "args": ["/bin/check_redis", "-p", "6000"],
-          "interval": "5s",
-          "timeout": "20s"
+          "interval": "5s"
         }
       ]
     },
@@ -285,8 +284,7 @@ Multiple services definitions can be provided at once using the plural
       "checks": [
         {
           "args": ["/bin/check_redis", "-p", "7000"],
-          "interval": "30s",
-          "timeout": "60s"
+          "interval": "30s"
         }
       ]
     },

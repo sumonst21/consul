@@ -139,8 +139,7 @@ A script check:
     "id": "mem-util",
     "name": "Memory utilization",
     "args": ["/usr/local/bin/check_mem.py", "-limit", "256MB"],
-    "interval": "10s",
-    "timeout": "1s"
+    "interval": "10s"
   }
 }
 ```
@@ -156,8 +155,7 @@ A HTTP check:
     "tls_skip_verify": false,
     "method": "POST",
     "header": {"x-foo":["bar", "baz"]},
-    "interval": "10s",
-    "timeout": "1s"
+    "interval": "10s"
   }
 }
 ```
@@ -170,8 +168,7 @@ A TCP check:
     "id": "ssh",
     "name": "SSH TCP on port 22",
     "tcp": "localhost:22",
-    "interval": "10s",
-    "timeout": "1s"
+    "interval": "10s"
   }
 }
 ```

@@ -611,8 +611,7 @@ For the `Connect` field, the parameters are:
     "DeregisterCriticalServiceAfter": "90m",
     "Args": ["/usr/local/bin/check_redis.py"],
     "HTTP": "http://localhost:5000/health",
-    "Interval": "10s",
-    "TTL": "15s"
+    "Interval": "10s"
   },
   "Weights": {
     "Passing": 10,
