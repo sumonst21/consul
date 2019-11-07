@@ -41,7 +41,7 @@ func vaultTLSConfig(config *structs.VaultCAProviderConfig) *vaultapi.TLSConfig {
 }
 
 // Configure sets up the provider using the given configuration.
-func (v *VaultProvider) Configure(clusterId string, isRoot bool, rawConfig map[string]interface{}) error {
+func (v *VaultProvider) Configure(clusterId string, isRoot bool, rawConfig map[string]interface{}, state map[string]string) error {
 	config, err := ParseVaultCAConfig(rawConfig)
 	if err != nil {
 		return err
@@ -67,6 +67,12 @@ func (v *VaultProvider) Configure(clusterId string, isRoot bool, rawConfig map[s
 	v.spiffeID = connect.SpiffeIDSigningForCluster(&structs.CAConfiguration{ClusterID: clusterId})
 
 	return nil
+}
+
+// State implements Provider. Vault provider needs no state other than the
+// user-provided config currently.
+func (v *VaultProvider) State() (map[string]string, error) {
+	return nil, nil
 }
 
 // ActiveRoot returns the active root CA certificate.
